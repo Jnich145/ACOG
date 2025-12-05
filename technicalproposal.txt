@@ -1,0 +1,497 @@
+ACOG – AUTOMATED CONTENT ORCHESTRATION & GENERATION ENGINE
+TECHNICAL & PROJECT PROPOSAL
+(FOUNDATIONAL DOCUMENT & ROADMAP)
+
+Prepared by: Justin Nichols
+Date: 5 Dec 2025
+
+⸻
+
+	1.	INTRODUCTION
+
+1.1 Purpose of This Document
+This document defines the vision, architecture, technical design, and project roadmap for ACOG (Automated Content Orchestration & Generation Engine). It will serve as the foundational reference for design decisions, implementation work, future extensions, and onboarding of collaborators.
+
+1.2 Vision Statement
+ACOG is an AI-orchestrated media production system that autonomously generates, manages, and publishes high-quality, persona-driven video content across multiple channels and niches.
+
+Instead of manually researching topics, writing scripts, recording audio, filming, editing, and uploading, ACOG coordinates a pipeline of services—OpenAI models, audio synthesis, avatar video generation, B-roll generation, and publishing APIs—to produce end-to-end content with minimal human intervention.
+
+1.3 Scope
+This proposal covers:
+	•	Core ACOG platform (backend services, frontends, APIs, data stores)
+	•	Multi-channel content model (personas, style guides, episodes)
+	•	End-to-end content pipelines (idea → script → voice → avatar video → B-roll → assembly → upload)
+	•	Integration with external providers (OpenAI, ElevenLabs, HeyGen/Synthesia, Runway/Pika, YouTube, etc.)
+	•	Pulse integration at a high level (trend intelligence feeder), without fully detailing Pulse internals
+	•	Security, cost, and scaling considerations
+	•	Project phases, milestones, and success metrics
+
+Out of scope for this version:
+	•	Custom model training or fine-tuning (future phase)
+	•	Legal and compliance documentation (e.g., detailed ToS/DPAs with vendors)
+	•	User-facing monetization strategies (ads, sponsorship management, etc.)
+
+⸻
+
+	2.	CONCEPTUAL OVERVIEW
+
+2.1 High-Level Concept
+ACOG is a centralized “content brain” and factory. It:
+	•	Accepts inputs such as:
+	•	Manual ideas (topics, prompts)
+	•	Automatically discovered opportunities from Pulse (social trends, comments, questions)
+	•	Plans episode structure using OpenAI models
+	•	Generates scripts, metadata, and creative artifacts
+	•	Calls specialized media APIs to produce audio, avatar video, and B-roll
+	•	Orchestrates assembly of these assets into final videos
+	•	Publishes content to destinations (initially YouTube; later other platforms)
+	•	Tracks versions, performance, and cost for each episode
+
+2.2 Key Design Principles
+	•	OpenAI at the core:
+	•	Use OpenAI’s latest GPT-4.x / o-series models for reasoning, planning, scriptwriting, metadata, and function calling.
+	•	Modularity:
+	•	ACOG is composed of services that can be developed, upgraded, or replaced independently (e.g., media provider swaps).
+	•	Multi-channel & multi-persona:
+	•	Support multiple channels, each with unique persona, style, tone, and visual identity.
+	•	Automation with human override:
+	•	System is capable of fully autonomous operation but supports manual review, edits, and re-runs at any stage.
+	•	Observability & reproducibility:
+	•	Every decision (prompts, parameters, intermediate artifacts) is recorded for audit, debugging, and future training.
+	•	Cost awareness:
+	•	Budget per episode and per channel, with guardrails around expensive operations.
+
+2.3 Target Use Cases
+	•	Multi-niche YouTube content studio:
+	•	Cosmology & edge science explainer channel
+	•	AI and technology channel
+	•	Investing and financial literacy channel
+	•	Training for entry-level technologists
+	•	Amateur radio, raising teens, philosophy, etc.
+	•	Content repurposing and series creation:
+	•	Automatically generate follow-ups, series, shorts from long-form episodes.
+	•	White-label production for future clients (long-term vision).
+
+⸻
+
+	3.	OBJECTIVES AND REQUIREMENTS
+
+3.1 Functional Objectives
+	1.	Support multiple channels, each defined by:
+	•	Persona (background, voice, attitude, values)
+	•	Style guide (tone, complexity, pacing, humor, do/don’t rules)
+	•	Preferred formats (long-form, shorts, explainer vs. commentary)
+	•	Publishing cadence targets
+	2.	Automate the content pipeline:
+	•	Input: topic/idea/opportunity
+	•	Research (optionally via Pulse / external search)
+	•	Episode planning (outline, scenes, beats)
+	•	Script drafting and refinement
+	•	Audio generation (voice clone)
+	•	Avatar video generation
+	•	B-roll generation or selection
+	•	Assembly/export
+	•	Upload and metadata (title, description, tags, thumbnail concepts)
+	3.	Provide a front-end dashboard:
+	•	Visualize channels, episodes, pipeline status
+	•	Configure personas and style guides
+	•	Review/edit scripts before production
+	•	Manually trigger/retry stages
+	•	Monitor costs and production statistics
+	4.	Provide a CLI for power users:
+	•	Create episodes and run pipelines from terminal
+	•	Query pipeline status and fetch assets
+	•	Integrate with shell scripts and development workflows
+
+3.2 Non-Functional Requirements
+	•	Reliability:
+	•	Automated retry logic on transient errors (API failures, network issues).
+	•	Scalability:
+	•	Support at least 10–20 concurrent episodes in progress without degradation.
+	•	Extensibility:
+	•	Easily plug in new media providers or additional channels.
+	•	Security:
+	•	Secure storage of API keys and OAuth tokens.
+	•	Role-based access to dashboard.
+	•	Auditability:
+	•	Persist prompts and model outputs for debugging.
+	•	Cost Controls:
+	•	Soft limits per day/month and per channel.
+	•	Performance:
+	•	MVP target: Single full episode (from final script to rendered video) within ~10–30 minutes, depending on media generation providers.
+
+⸻
+
+	4.	ARCHITECTURE OVERVIEW
+
+4.1 Logical Architecture
+
+Major components:
+	1.	ACOG Core Backend (Orchestrator)
+	•	Exposes a REST/JSON (and possibly WebSocket) API
+	•	Manages workflows, state, and communication with external services
+	2.	OpenAI Integration Layer
+	•	Planner: topic → plan/outline
+	•	Script engine: plan → script
+	•	Metadata engine: final script → title, description, tags, social copy
+	•	Validator: optional QA/critique/refinement pass
+	3.	Media Integration Layer
+	•	Voice: ElevenLabs (or equivalent)
+	•	Avatar video: HeyGen / Synthesia (primary candidates)
+	•	B-roll video: Runway / Pika (for generative B-roll)
+	•	Thumbnail: optional image generation tool later (e.g., DALL·E / Midjourney / other)
+	4.	Storage Layer
+	•	Relational DB: PostgreSQL (channels, episodes, assets, logs)
+	•	Object storage: S3/MinIO (scripts, audio, video, thumbnails)
+	5.	Frontend (Web UI)
+	•	Next.js/React SPA or similar
+	•	Communicates with backend via REST + WebSocket
+	•	Implements channel/episode management and monitoring
+	6.	CLI Tool
+	•	Python-based CLI (Typer or Click)
+	•	Uses same backend APIs as frontend
+	7.	Pulse (Trend Intelligence) – Integration Only
+	•	Pulse itself ingests data from social platforms and analytics tools
+	•	ACOG exposes endpoints for Pulse to submit “opportunity events”
+	•	These events become pre-seeded episode ideas
+
+4.2 Deployment Model
+
+MVP deployment target:
+	•	Dockerized services orchestrated via Docker Compose or a lightweight container platform.
+	•	Components:
+	•	Backend API service (FastAPI)
+	•	Worker service for long-running jobs (Celery/Redis or Prefect)
+	•	PostgreSQL container
+	•	MinIO (S3-compatible) for dev/local storage
+	•	Next.js frontend (served as static or containerized)
+
+Future deployment:
+	•	Move to cloud (AWS ECS/EKS, GCP GKE, etc.)
+	•	Managed Postgres (RDS / Cloud SQL)
+	•	Real S3 for storage
+	•	Load balancer and scaling for workers
+
+⸻
+
+	5.	DETAILED SYSTEM DESIGN
+
+5.1 Domain Model
+
+Core entities:
+	•	Channel
+	•	id
+	•	name
+	•	description
+	•	persona (JSON)
+	•	style_guide (JSON)
+	•	avatar_profile (e.g., provider, avatar_id, framing preferences)
+	•	voice_profile (e.g., provider, voice_id, tone defaults)
+	•	cadence (target frequency)
+	•	Episode
+	•	id
+	•	channel_id
+	•	title (working and final)
+	•	status (idea, planning, scripting, production, published, failed, etc.)
+	•	idea_source (manual, Pulse, other)
+	•	plan (JSON – structured outline)
+	•	script (JSON/text)
+	•	metadata (title, description, tags, thumbnail prompts)
+	•	pipeline_state (JSON – each stage’s status, timestamps, error logs)
+	•	created_at, updated_at, published_at
+	•	Asset
+	•	id
+	•	episode_id
+	•	type (script, audio, avatar_video, b_roll, assembled_video, thumbnail)
+	•	uri (S3/MinIO path or external URL)
+	•	provider (e.g., “ElevenLabs”, “HeyGen”)
+	•	metadata (JSON – duration, resolution, cost, etc.)
+	•	created_at
+	•	PulseEvent (optional in ACOG DB)
+	•	id
+	•	source (YouTube, Reddit, etc.)
+	•	payload (JSON – comments, trending topics, etc.)
+	•	topic_tags, score
+	•	created_at
+
+5.2 Pipeline Stages
+
+Each episode follows a pipeline that can be expressed as a DAG (Directed Acyclic Graph). For MVP, a mostly linear sequence is sufficient:
+	1.	Idea Creation / Intake
+	•	Source: manual user input or Pulse event
+	•	Output: initial topic + brief
+	2.	Planning (OpenAI Planner)
+	•	Input: topic + channel persona/style guides + optional Pulse context
+	•	OpenAI model: GPT-4-class (e.g., gpt-4.1)
+	•	Output: structured plan JSON, including:
+	•	Hook(s)
+	•	Intro
+	•	Sections/scenes
+	•	Key points/facts
+	•	Calls to action
+	•	B-roll suggestions per section
+	3.	Script Generation (OpenAI Script Engine)
+	•	Input: plan + channel persona/style guide
+	•	OpenAI model: GPT-4.1 or GPT-4.1-mini / turbo variant for cost
+	•	Output: full script text with markers for:
+	•	Avatar vs. voice-over parts
+	•	Emotional cues (tone, emphasis)
+	•	B-roll cues (e.g., “[BROLL: swirling galaxy]”)
+	4.	Script Refinement (Optional QA pass)
+	•	Input: script + plan + constraints
+	•	OpenAI model: reasoning-focused; ask it to critique and fix issues
+	•	Output: revised script (ensuring coherence, fact checks where possible)
+	5.	Metadata Generation (OpenAI)
+	•	Input: final script + channel style
+	•	Output:
+	•	Video title options
+	•	Description (with SEO keywords)
+	•	Tag suggestions
+	•	Thumbnail text ideas
+	6.	Audio Generation (Voice Provider – e.g., ElevenLabs)
+	•	Input: final script (narration sections) + voice profile
+	•	Output: audio file (MP3/WAV)
+	•	Asset recorded with type=“audio”
+	7.	Avatar Video Generation (Avatar Provider – e.g., HeyGen/Synthesia)
+	•	Input: audio segments + script segments designated for on-camera avatar; avatar profile (face, clothing, framing)
+	•	Output: talking-head video clips
+	•	Asset type=“avatar_video”
+	8.	B-roll Generation / Selection
+	•	Generative approach:
+	•	Use Runway/Pika to generate clips based on B-roll prompts from plan/script
+	•	Or curated approach:
+	•	Use a stock B-roll library (future option)
+	•	Output: multiple B-roll clips (type=“b_roll”)
+	9.	Assembly and Rendering
+	•	Either:
+	•	Call an external service (if available) to assemble tracks; or
+	•	Use a local pipeline (ffmpeg + simple edit list) to:
+	•	Layer avatar video + B-roll according to script timing
+	•	Mix audio
+	•	Render final MP4
+	•	Output: assembled video (type=“assembled_video”)
+	10.	Upload and Finalization
+	•	Use YouTube Data API (and OAuth tokens) to upload:
+	•	Final video file
+	•	Title, description, tags, thumbnail (if generated)
+	•	Save published URL into episode metadata
+	•	Status → “published”
+
+5.3 Orchestration Patterns
+
+The orchestrator (backend) will:
+	•	Maintain a state machine per episode:
+	•	Each stage can be “pending”, “running”, “completed”, “failed”.
+	•	Use a task queue / workflow engine:
+	•	MVP: Celery + Redis, or Prefect for more advanced flows.
+	•	Provide idempotent task handlers:
+	•	Safe retries on network/API errors.
+	•	Use OpenAI function calling / tool calling (where applicable) to:
+	•	Request structured JSON from the Planner
+	•	Possibly represent pipeline actions as “tools” so OpenAI can orchestrate multistep flows more intelligently in advanced phases.
+
+⸻
+
+	6.	TECHNOLOGY STACK
+
+6.1 Backend
+	•	Language: Python 3.x
+	•	Framework: FastAPI (REST API + background tasks for simple flows)
+	•	Task orchestration:
+	•	MVP: Celery + Redis
+	•	Alternative/future: Prefect or Temporal for robust DAG management
+
+6.2 AI / LLM
+	•	Provider: OpenAI
+	•	Models:
+	•	Planning and complex reasoning: GPT-4-class model (e.g., gpt-4.1 / o3-mini depending on capabilities and cost)
+	•	Script drafting: GPT-4.1 or GPT-4.1-mini / turbo (fine-tuned for style via prompting)
+	•	Metadata & SEO: GPT-4.1-mini or lighter models to control cost
+	•	QA/critique: GPT-4.1 or reasoning-optimized model
+
+6.3 Media Providers
+	•	Voice: ElevenLabs (or similar high-quality provider)
+	•	Avatar Video: HeyGen or Synthesia (final choice based on API capabilities, lip-sync quality, pricing, license terms)
+	•	B-roll: Runway Gen-3 / Pika (chosen based on quality and cost)
+	•	Video assembly: ffmpeg (local tool) or external service if one proves superior in speed and reliability
+
+6.4 Frontend
+	•	Framework: Next.js (React)
+	•	Styling: TailwindCSS + component library (e.g., ShadCN UI or similar)
+	•	State Management: React Query / SWR for API calls
+	•	Auth: NextAuth or custom JWT-based auth via backend
+
+6.5 CLI
+	•	Language: Python
+	•	Library: Typer (or Click)
+	•	Behavior:
+	•	Auth configuration (API base URL, token)
+	•	Commands to create episodes, run pipeline, inspect status, download assets
+
+6.6 Data Storage
+	•	Relational database: PostgreSQL
+	•	Object storage:
+	•	Local dev: MinIO
+	•	Production: AWS S3 or equivalent
+
+6.7 DevOps
+	•	Containerization: Docker
+	•	Local orchestration: Docker Compose
+	•	CI/CD: GitHub Actions or GitLab CI (linting, tests, build images, deploy)
+
+⸻
+
+	7.	SECURITY & COMPLIANCE
+
+7.1 Secrets Management
+	•	Store API keys (OpenAI, ElevenLabs, HeyGen, Runway, etc.) in:
+	•	Environment variables (dev)
+	•	Secrets manager (cloud deployment, e.g., AWS Secrets Manager)
+	•	No secrets committed to source control.
+
+7.2 Authentication & Authorization
+	•	Dashboard access protected by user accounts:
+	•	Role types: admin, editor, viewer
+	•	CLI access using personal access tokens or OAuth tokens.
+
+7.3 Data Protection
+	•	TLS/HTTPS for all external and internal API access (where applicable).
+	•	Optional encryption at rest for sensitive metadata.
+
+7.4 Compliance Considerations
+	•	Respect provider ToS (e.g., OpenAI, media tools).
+	•	Respect platform ToS (e.g., YouTube APIs).
+	•	Clear disclosure and labeling of AI-generated avatars where appropriate.
+
+⸻
+
+	8.	PROJECT PHASES AND ROADMAP
+
+8.1 Phase 0 – Foundational Planning (1–2 weeks)
+	•	Finalize this document as the foundational spec.
+	•	Identify priority channels (e.g., pick 3–4 initial niches).
+	•	Define initial personas and style guides.
+	•	Set up repos, baseline CI, and basic environment.
+
+Deliverables:
+	•	Approved technical roadmap
+	•	Git repository skeletons (backend, frontend, cli)
+	•	Environment bootstrap (Docker Compose, basic configs)
+
+8.2 Phase 1 – Core Platform MVP (Backend + Frontend Skeleton) (4–6 weeks)
+
+Backend:
+	•	Implement basic FastAPI service with health checks.
+	•	Set up PostgreSQL schema (channels, episodes, assets).
+	•	Implement simple in-process or Celery-based job handling.
+	•	Implement OpenAI planner and script engine endpoints (no media integration yet).
+
+Frontend:
+	•	Build authentication shell (even if local dev only at first).
+	•	Channel management UI: create/edit channel with persona and style guide.
+	•	Episode list & detail pages (view plan/script stages).
+
+CLI:
+	•	Implement basic “create episode” and “trigger planning/script” commands.
+
+Deliverables:
+	•	Can create channels and episodes
+	•	Can run “idea → plan → script” for at least one channel
+	•	Scripts visible and editable in UI
+
+8.3 Phase 2 – Media Integration and Partial Automation (6–8 weeks)
+	•	Integrate ElevenLabs for voice generation:
+	•	Configure voice profiles per channel.
+	•	Generate audio for script segments.
+	•	Integrate avatar provider (HeyGen/Synthesia) for on-camera segments.
+	•	Integrate B-roll provider (Runway/Pika) for select scenes.
+	•	Implement asset storage and retrieval in object storage.
+	•	Implement pipeline progression and status updates in UI.
+
+Deliverables:
+	•	Can run full pipeline: script → audio → avatar video → B-roll, individually producible
+	•	Assets visible in dashboard per episode
+	•	CLI can trigger and monitor media tasks
+
+8.4 Phase 3 – Assembly, Upload, and “End-to-End” Video (4–6 weeks)
+	•	Implement simple video assembly pipeline (ffmpeg-based or delegated).
+	•	Integrate YouTube Data API for upload (including OAuth setup).
+	•	Implement metadata generation and apply to upload.
+	•	Add basic cost tracking per episode (estimated from token usage + media API usage).
+
+Deliverables:
+	•	Can create an episode and fully produce a finished video uploaded to a target YouTube channel with minimal manual intervention.
+	•	Dashboard shows “published” status and links to live video.
+
+8.5 Phase 4 – Pulse Integration and Autonomy Enhancements (6–10 weeks)
+	•	Implement endpoints for Pulse to submit “opportunity events” into ACOG.
+	•	Implement auto-episode creation rules:
+	•	“If opportunity score > threshold and channel = X, auto-create episode.”
+	•	Add QA/critique passes for scripts (optional) using OpenAI.
+	•	Implement scheduling/cadence logic (e.g., “produce 3 videos per week per channel”).
+
+Deliverables:
+	•	ACOG can automatically create and plan episodes from incoming Pulse events.
+	•	Scheduling rules and per-channel automation settings exist.
+
+8.6 Phase 5 – Optimization, Analytics, and Scaling (ongoing)
+	•	Cost optimization: choose model variants and prompts for cost/quality trade-offs.
+	•	Performance dashboards (time per stage, error rates, average cost per episode).
+	•	Advanced scripting controls (series arcs, callbacks to prior episodes, cross-channel references).
+
+⸻
+
+	9.	RISKS AND MITIGATIONS
+
+9.1 Technical Risks
+	•	External API changes or deprecations
+	•	Mitigation: isolate providers behind adapters; maintain well-documented abstraction layers.
+	•	Cost growth with scale
+	•	Mitigation: per-episode budgets, fallbacks to cheaper models where acceptable, batch processing.
+	•	Latency and throughput issues
+	•	Mitigation: asynchronous workflows, horizontal scaling of workers, caching.
+
+9.2 Content / Ethical Risks
+	•	Overly synthetic or uncanny content harming brand trust
+	•	Mitigation: maintain slight stylization; clearly indicate some content uses AI hosts.
+	•	Misinformation from model hallucinations
+	•	Mitigation: stronger research integration, optional fact-checking prompts, manual reviews for sensitive topics.
+
+9.3 Operational Risks
+	•	Dependency on specific third-party providers
+	•	Mitigation: design for provider substitution; consider alternate vendors or local tools when available.
+
+⸻
+
+	10.	GOVERNANCE AND CHANGE MANAGEMENT
+
+10.1 Document Ownership
+	•	This proposal is the foundational ACOG architecture and project plan.
+	•	Changes should be recorded via versioning:
+	•	e.g., ACOG_Technical_Proposal_v1.1.docx, with a change log.
+
+10.2 Decision Log
+	•	Maintain a lightweight decision log for:
+	•	Selected providers (e.g., HeyGen vs. Synthesia)
+	•	Major architectural changes (e.g., moving from Celery to Temporal)
+
+10.3 Onboarding and Documentation
+	•	Maintain a developer-oriented README and architecture overview in the repository.
+	•	Create brief runbooks/playbooks for:
+	•	Deploying the system locally
+	•	Debugging common failures
+	•	Rotating keys and tokens
+
+⸻
+
+	11.	CONCLUSION
+
+ACOG is positioned to become an internal “AI media studio engine” capable of:
+	•	Serving multiple thematic channels
+	•	Maintaining distinct personas and narrative voices
+	•	Turning ideas (or raw social signals) into polished video content
+	•	Reducing production time from days/hours to minutes
+	•	Creating a scalable, semi-autonomous content machine
+
+This document defines the base architecture, technology choices, and phased roadmap needed to realize that vision. As work progresses, this proposal can be extended with more detailed interface specifications, API contracts, and component-level design documents, but it should remain the primary foundational reference for ACOG’s direction and scope.
