@@ -741,3 +741,151 @@ async def run_episode_from_stage(
             message=f"Pipeline started from '{start_stage}' (continues through remaining stages)",
         )
     )
+
+
+@router.post(
+    "/episodes/{episode_id}/cancel-jobs",
+    response_model=ApiResponse[dict[str, Any]],
+    status_code=status.HTTP_200_OK,
+    summary="Cancel Active Jobs",
+    description="Cancel all active (queued/running) jobs for an episode.",
+)
+async def cancel_episode_jobs(
+    episode_id: UUID,
+    db: Session = Depends(get_db),
+) -> ApiResponse[dict[str, Any]]:
+    """
+    Cancel all active jobs for an episode.
+
+    This endpoint cancels any jobs in queued or running state, allowing
+    the pipeline to be restarted fresh.
+
+    Args:
+        episode_id: Episode unique identifier
+        db: Database session
+
+    Returns:
+        Count of cancelled jobs and their IDs
+    """
+    # Get episode
+    episode = (
+        db.query(Episode)
+        .filter(Episode.id == episode_id, Episode.deleted_at.is_(None))
+        .first()
+    )
+    if not episode:
+        raise NotFoundError(resource_type="Episode", resource_id=str(episode_id))
+
+    # Find and cancel active jobs
+    active_jobs = (
+        db.query(Job)
+        .filter(
+            Job.episode_id == episode_id,
+            Job.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]),
+        )
+        .all()
+    )
+
+    cancelled_ids = []
+    for job in active_jobs:
+        job.status = JobStatus.CANCELLED
+        job.error_message = "Cancelled by user"
+        job.completed_at = datetime.now(UTC)
+        cancelled_ids.append(str(job.id))
+
+        logger.info(
+            f"Cancelled job {job.id} (stage={job.stage})",
+            extra={
+                "episode_id": str(episode_id),
+                "job_id": str(job.id),
+                "stage": job.stage,
+            },
+        )
+
+    db.commit()
+
+    return ApiResponse(
+        data={
+            "episode_id": str(episode_id),
+            "cancelled_count": len(cancelled_ids),
+            "cancelled_job_ids": cancelled_ids,
+            "message": f"Cancelled {len(cancelled_ids)} active job(s)",
+        }
+    )
+
+
+@router.post(
+    "/cancel-stale-jobs",
+    response_model=ApiResponse[dict[str, Any]],
+    status_code=status.HTTP_200_OK,
+    summary="Cancel Stale Jobs (System-wide)",
+    description=(
+        "Cancel all jobs that have been stuck in queued/running state for too long. "
+        "Default threshold is 30 minutes."
+    ),
+)
+async def cancel_stale_jobs(
+    max_age_minutes: int = 30,
+    db: Session = Depends(get_db),
+) -> ApiResponse[dict[str, Any]]:
+    """
+    Cancel all stale jobs across the system.
+
+    Jobs are considered stale if they've been in queued/running state
+    for longer than the specified threshold.
+
+    Args:
+        max_age_minutes: Maximum age in minutes before a job is considered stale
+        db: Database session
+
+    Returns:
+        Count of cancelled jobs and details
+    """
+    from datetime import timedelta
+
+    cutoff_time = datetime.now(UTC) - timedelta(minutes=max_age_minutes)
+
+    # Find stale jobs
+    stale_jobs = (
+        db.query(Job)
+        .filter(
+            Job.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]),
+            Job.created_at < cutoff_time,
+        )
+        .all()
+    )
+
+    cancelled_details = []
+    for job in stale_jobs:
+        age_minutes = (datetime.now(UTC) - job.created_at.replace(tzinfo=UTC)).total_seconds() / 60
+        job.status = JobStatus.CANCELLED
+        job.error_message = f"Cancelled: Stale job (age: {age_minutes:.0f} minutes)"
+        job.completed_at = datetime.now(UTC)
+
+        cancelled_details.append({
+            "job_id": str(job.id),
+            "episode_id": str(job.episode_id),
+            "stage": job.stage,
+            "age_minutes": round(age_minutes),
+        })
+
+        logger.info(
+            f"Cancelled stale job {job.id} (stage={job.stage}, age={age_minutes:.0f}m)",
+            extra={
+                "episode_id": str(job.episode_id),
+                "job_id": str(job.id),
+                "stage": job.stage,
+                "age_minutes": age_minutes,
+            },
+        )
+
+    db.commit()
+
+    return ApiResponse(
+        data={
+            "cancelled_count": len(cancelled_details),
+            "threshold_minutes": max_age_minutes,
+            "cancelled_jobs": cancelled_details,
+            "message": f"Cancelled {len(cancelled_details)} stale job(s) older than {max_age_minutes} minutes",
+        }
+    )

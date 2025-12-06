@@ -216,6 +216,26 @@ export const api = {
     ),
 
   /**
+   * Cancel all active jobs for an episode
+   * Useful when jobs get stuck and need to be cleared before retrying
+   */
+  cancelEpisodeJobs: (episodeId: string) =>
+    fetcher<ApiResponse<{ cancelled_count: number; cancelled_job_ids: string[]; message: string }>>(
+      `/pipeline/episodes/${episodeId}/cancel-jobs`,
+      { method: "POST" }
+    ),
+
+  /**
+   * Cancel all stale jobs system-wide
+   * Jobs older than max_age_minutes (default 30) are cancelled
+   */
+  cancelStaleJobs: (maxAgeMinutes: number = 30) =>
+    fetcher<ApiResponse<{ cancelled_count: number; threshold_minutes: number; cancelled_jobs: Array<{ job_id: string; episode_id: string; stage: string; age_minutes: number }>; message: string }>>(
+      `/pipeline/cancel-stale-jobs?max_age_minutes=${maxAgeMinutes}`,
+      { method: "POST" }
+    ),
+
+  /**
    * Retry a specific stage and continue pipeline
    * Uses run-from-stage endpoint to re-run the failed stage and continue
    * through remaining stages automatically.

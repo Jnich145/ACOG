@@ -75,6 +75,10 @@ export default function EpisodeDetailPage() {
   const [isTriggering, setIsTriggering] = useState(false);
   const [triggerError, setTriggerError] = useState<string | null>(null);
 
+  // Cancel jobs state
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelResult, setCancelResult] = useState<{ count: number; message: string } | null>(null);
+
   // Update polling state based on active jobs
   useEffect(() => {
     setShouldPoll(isRunning || false);
@@ -134,6 +138,32 @@ export default function EpisodeDetailPage() {
       }
     } finally {
       setIsTriggering(false);
+    }
+  };
+
+  const handleCancelJobs = async () => {
+    setIsCancelling(true);
+    setCancelResult(null);
+    setTriggerError(null);
+
+    try {
+      const response = await api.cancelEpisodeJobs(episodeId);
+      const result = response.data;
+      setCancelResult({ count: result.cancelled_count, message: result.message });
+
+      // Stop polling since jobs are cancelled
+      setShouldPoll(false);
+
+      // Refresh all data
+      await Promise.all([mutateEpisode(), mutatePipeline(), mutateAssets()]);
+    } catch (err) {
+      if (isApiError(err)) {
+        setTriggerError(`Failed to cancel jobs: ${err.message}`);
+      } else {
+        setTriggerError("Failed to cancel jobs. Please try again.");
+      }
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -234,9 +264,20 @@ export default function EpisodeDetailPage() {
               </>
             )}
             {isRunning && (
-              <Button disabled loading>
-                Pipeline Running...
-              </Button>
+              <>
+                <Button disabled loading>
+                  Pipeline Running...
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleCancelJobs}
+                  loading={isCancelling}
+                  disabled={isCancelling}
+                  className="text-red-600 border-red-300 hover:bg-red-50"
+                >
+                  Cancel Jobs
+                </Button>
+              </>
             )}
           </div>
         }
@@ -255,11 +296,25 @@ export default function EpisodeDetailPage() {
         }}
       />
 
+      {/* Cancel Success Alert */}
+      {cancelResult && (
+        <Alert
+          variant="success"
+          title="Jobs Cancelled"
+          className="mb-6"
+          onDismiss={() => setCancelResult(null)}
+        >
+          {cancelResult.count > 0
+            ? `Cancelled ${cancelResult.count} job${cancelResult.count === 1 ? "" : "s"}. You can now retry the pipeline.`
+            : "No active jobs to cancel."}
+        </Alert>
+      )}
+
       {/* Trigger Error Alert */}
       {triggerError && (
         <Alert
           variant="error"
-          title="Failed to run pipeline"
+          title="Pipeline Error"
           className="mb-6"
           onDismiss={() => setTriggerError(null)}
         >
