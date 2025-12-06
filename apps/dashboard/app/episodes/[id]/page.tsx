@@ -10,8 +10,8 @@ import { LoadingScreen } from "@/components/ui/Spinner";
 import { Alert } from "@/components/ui/Alert";
 import { PipelineStatus, PlanViewer, MetadataViewer, EpisodeFailurePanel, CostSummary, ScriptEditor } from "@/components/episodes";
 import { AssetList, AssetViewer } from "@/components/assets";
-import { VoiceSelector } from "@/components/audio";
-import type { VoiceSettings } from "@/lib/types";
+import { VoiceSelector, AudioGenerator } from "@/components/audio";
+import type { VoiceSettings, Voice } from "@/lib/types";
 import { useEpisode } from "@/hooks/useEpisode";
 import { usePipelineStatus } from "@/hooks/usePipelineStatus";
 import { useAssets } from "@/hooks/useAssets";
@@ -80,6 +80,16 @@ export default function EpisodeDetailPage() {
   // Cancel jobs state
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelResult, setCancelResult] = useState<{ count: number; message: string } | null>(null);
+
+  // Audio/voice state
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null);
+  const [selectedVoiceName, setSelectedVoiceName] = useState<string | null>(null);
+  const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>({
+    stability: 0.5,
+    similarity_boost: 0.75,
+    style: 0.0,
+    use_speaker_boost: true,
+  });
 
   // Update polling state based on active jobs
   useEffect(() => {
@@ -541,9 +551,23 @@ export default function EpisodeDetailPage() {
               </CardContent>
             </Card>
             <VoiceSelector
-              onSelect={(voiceId: string, settings: VoiceSettings) => {
-                // TODO: Store selected voice and settings, then trigger audio generation
-                console.log("Voice selected:", voiceId, settings);
+              selectedVoiceId={selectedVoiceId || undefined}
+              onSelect={(voiceId: string, settings: VoiceSettings, voiceName: string) => {
+                setSelectedVoiceId(voiceId);
+                setVoiceSettings(settings);
+                setSelectedVoiceName(voiceName);
+              }}
+            />
+            <AudioGenerator
+              episodeId={episodeId}
+              selectedVoiceId={selectedVoiceId}
+              voiceName={selectedVoiceName || undefined}
+              settings={voiceSettings}
+              hasScript={!!episode.script?.full_text}
+              onAudioGenerated={(response) => {
+                // Refresh assets after audio generation
+                mutateAssets();
+                mutateEpisode();
               }}
             />
           </div>

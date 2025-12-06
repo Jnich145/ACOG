@@ -19,7 +19,7 @@ export interface VoiceSelectorProps {
   /** Currently selected voice ID */
   selectedVoiceId?: string;
   /** Callback when user confirms voice selection */
-  onSelect: (voiceId: string, settings: VoiceSettings) => void;
+  onSelect: (voiceId: string, settings: VoiceSettings, voiceName: string) => void;
   /** Whether to show voice settings sliders (default: true) */
   showSettings?: boolean;
   /** Optional className for the container */
@@ -481,7 +481,7 @@ export function VoiceSelector({
   // Handle confirm selection
   const handleConfirmSelection = useCallback(() => {
     if (selectedVoice) {
-      onSelect(selectedVoice.voice_id, settings);
+      onSelect(selectedVoice.voice_id, settings, selectedVoice.name);
     }
   }, [selectedVoice, settings, onSelect]);
 
