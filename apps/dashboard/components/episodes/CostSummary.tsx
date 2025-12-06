@@ -67,13 +67,20 @@ export function CostSummary({ jobs, isLoading, isError }: CostSummaryProps) {
     );
   }
 
+  // Helper to parse cost values (backend returns Decimal as string)
+  const parseCost = (value: number | string | null | undefined): number => {
+    if (value === null || value === undefined) return 0;
+    if (typeof value === "string") return parseFloat(value) || 0;
+    return value;
+  };
+
   // Aggregate costs by stage
   const costsByStage = completedJobs.reduce<Record<string, StageCost>>((acc, job) => {
     const stage = job.stage;
     if (!acc[stage]) {
       acc[stage] = { stage, cost: 0, tokens: 0, jobCount: 0 };
     }
-    acc[stage].cost += job.cost_usd ?? 0;
+    acc[stage].cost += parseCost(job.cost_usd);
     acc[stage].tokens += job.tokens_used ?? 0;
     acc[stage].jobCount += 1;
     return acc;
@@ -89,7 +96,7 @@ export function CostSummary({ jobs, isLoading, isError }: CostSummaryProps) {
   const totalTokens = stageEntries.reduce((sum, s) => sum + s.tokens, 0);
 
   const formatCost = (cost: number): string => {
-    if (cost === 0) return "$0.00";
+    if (!cost || cost === 0) return "$0.00";
     if (cost < 0.01) return `$${cost.toFixed(4)}`;
     return `$${cost.toFixed(2)}`;
   };
