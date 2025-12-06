@@ -27,8 +27,11 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Python lib directories (but not dashboard/lib which is source code)
+/lib/
+apps/api/lib/
 lib64/
+!apps/dashboard/lib/
 parts/
 sdist/
 var/

@@ -19,7 +19,7 @@ from acog.models.episode import Episode
 from acog.models.job import Job
 from acog.models.enums import EpisodeStatus, JobStatus, PipelineStage
 from acog.schemas.common import ApiResponse
-from acog.schemas.job import PipelineTriggerRequest, PipelineTriggerResponse
+from acog.schemas.job import PipelineTriggerRequest, PipelineTriggerResponse, RunFromStageRequest
 
 # Import Celery tasks for dispatching
 from acog.workers.tasks.pipeline import (
@@ -33,6 +33,7 @@ from acog.workers.tasks.pipeline import (
 from acog.workers.tasks.orchestrator import (
     run_stage_1_pipeline,
     run_full_pipeline,
+    run_pipeline_from_stage,
     PIPELINE_STAGE_ORDER,
 )
 
@@ -630,5 +631,113 @@ async def run_episode_full_pipeline(
             stage="full_pipeline",
             status=job.status.value,
             message="Full pipeline started (all stages)",
+        )
+    )
+
+
+@router.post(
+    "/episodes/{episode_id}/run-from-stage",
+    response_model=ApiResponse[PipelineTriggerResponse],
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Run Pipeline From Stage",
+    description=(
+        "Resume the pipeline from a specific stage. "
+        "Useful for retrying after failures - runs the specified stage "
+        "and continues through remaining stages."
+    ),
+)
+async def run_episode_from_stage(
+    episode_id: UUID,
+    request: RunFromStageRequest,
+    db: Session = Depends(get_db),
+) -> ApiResponse[PipelineTriggerResponse]:
+    """
+    Run pipeline starting from a specific stage.
+
+    This endpoint allows resuming a pipeline from any stage, running that
+    stage and all subsequent stages. Useful for:
+    - Retrying after a failure (re-run failed stage + continue)
+    - Skipping completed stages when resuming
+
+    Args:
+        episode_id: Episode unique identifier
+        request: Run from stage request with start_stage and optional skip_stages
+        db: Database session
+
+    Returns:
+        Pipeline trigger confirmation with Celery task ID
+
+    Raises:
+        NotFoundError: If episode not found
+        ValidationError: If prerequisites not met or invalid state
+    """
+    # Get episode
+    episode = (
+        db.query(Episode)
+        .filter(Episode.id == episode_id, Episode.deleted_at.is_(None))
+        .first()
+    )
+    if not episode:
+        raise NotFoundError(resource_type="Episode", resource_id=str(episode_id))
+
+    # Check for any active jobs
+    active_jobs = (
+        db.query(Job)
+        .filter(
+            Job.episode_id == episode_id,
+            Job.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]),
+        )
+        .count()
+    )
+    if active_jobs > 0:
+        raise ValidationError(
+            message="Episode has active jobs. Wait for them to complete or cancel them.",
+            field="status",
+            details={"active_job_count": active_jobs},
+        )
+
+    start_stage = request.start_stage.value
+
+    # Create a placeholder job for tracking the pipeline run
+    job = Job(
+        episode_id=episode_id,
+        stage=f"pipeline_from_{start_stage}",
+        status=JobStatus.QUEUED,
+        input_params={
+            "start_stage": start_stage,
+            "skip_stages": request.skip_stages,
+        },
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    # Dispatch the pipeline from stage Celery task
+    celery_task = run_pipeline_from_stage.delay(
+        str(episode_id),
+        start_stage,
+        request.skip_stages,
+    )
+    job.celery_task_id = celery_task.id
+    db.commit()
+
+    logger.info(
+        f"Dispatched pipeline from stage '{start_stage}' for episode {episode_id}",
+        extra={
+            "episode_id": str(episode_id),
+            "job_id": str(job.id),
+            "celery_task_id": celery_task.id,
+            "start_stage": start_stage,
+            "skip_stages": request.skip_stages,
+        },
+    )
+
+    return ApiResponse(
+        data=PipelineTriggerResponse(
+            job_id=job.id,
+            episode_id=episode_id,
+            stage=f"pipeline_from_{start_stage}",
+            status=job.status.value,
+            message=f"Pipeline started from '{start_stage}' (continues through remaining stages)",
         )
     )

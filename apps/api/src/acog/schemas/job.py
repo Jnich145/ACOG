@@ -246,3 +246,19 @@ class PipelineTriggerResponse(BaseModel):
     stage: str = Field(description="Triggered stage")
     status: str = Field(description="Initial job status")
     message: str = Field(description="Status message")
+
+
+class RunFromStageRequest(BaseModel):
+    """
+    Schema for resuming pipeline from a specific stage.
+
+    Attributes:
+        start_stage: Stage to start from
+        skip_stages: Optional list of stages to skip
+    """
+
+    start_stage: PipelineStage = Field(description="Pipeline stage to start from")
+    skip_stages: list[str] = Field(
+        default_factory=list,
+        description="List of stage names to skip",
+    )

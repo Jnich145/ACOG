@@ -125,7 +125,7 @@ export function EpisodeFailurePanel({
             Retry failed: {retryError}
           </div>
         )}
-        <div className="pt-2">
+        <div className="pt-2 flex flex-col gap-1">
           <Button
             variant="outline"
             size="sm"
@@ -133,8 +133,11 @@ export function EpisodeFailurePanel({
             loading={isRetrying}
             disabled={isRetrying}
           >
-            Retry from {snakeToTitle(failedJob.stage)}
+            Resume from {snakeToTitle(failedJob.stage)}
           </Button>
+          <span className="text-xs text-red-500">
+            Will re-run this stage and continue through remaining stages
+          </span>
         </div>
       </div>
     </Alert>
