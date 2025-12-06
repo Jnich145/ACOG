@@ -8,11 +8,12 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { LoadingScreen } from "@/components/ui/Spinner";
 import { Alert } from "@/components/ui/Alert";
-import { PipelineStatus, PlanViewer, MetadataViewer } from "@/components/episodes";
+import { PipelineStatus, PlanViewer, MetadataViewer, EpisodeFailurePanel } from "@/components/episodes";
 import { AssetList, AssetViewer } from "@/components/assets";
 import { useEpisode } from "@/hooks/useEpisode";
 import { usePipelineStatus } from "@/hooks/usePipelineStatus";
 import { useAssets } from "@/hooks/useAssets";
+import { useJobs } from "@/hooks/useJobs";
 import { api, isApiError } from "@/lib/api";
 import { formatDate, cn } from "@/lib/utils";
 import {
@@ -56,6 +57,12 @@ export default function EpisodeDetailPage() {
     error: assetsError,
     mutate: mutateAssets,
   } = useAssets(episodeId);
+
+  const {
+    jobs,
+    isLoading: isLoadingJobs,
+    isError: isJobsError,
+  } = useJobs(episodeId);
 
   // Tab state
   const [activeTab, setActiveTab] = useState<TabId>("overview");
@@ -233,6 +240,13 @@ export default function EpisodeDetailPage() {
             )}
           </div>
         }
+      />
+
+      {/* Pipeline Failure Panel */}
+      <EpisodeFailurePanel
+        jobs={jobs}
+        isLoading={isLoadingJobs}
+        isError={isJobsError}
       />
 
       {/* Trigger Error Alert */}
