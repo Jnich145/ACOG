@@ -8,8 +8,10 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { LoadingScreen } from "@/components/ui/Spinner";
 import { Alert } from "@/components/ui/Alert";
-import { PipelineStatus, PlanViewer, MetadataViewer, EpisodeFailurePanel, CostSummary } from "@/components/episodes";
+import { PipelineStatus, PlanViewer, MetadataViewer, EpisodeFailurePanel, CostSummary, ScriptEditor } from "@/components/episodes";
 import { AssetList, AssetViewer } from "@/components/assets";
+import { VoiceSelector } from "@/components/audio";
+import type { VoiceSettings } from "@/lib/types";
 import { useEpisode } from "@/hooks/useEpisode";
 import { usePipelineStatus } from "@/hooks/usePipelineStatus";
 import { useAssets } from "@/hooks/useAssets";
@@ -24,7 +26,7 @@ import {
   type Priority,
 } from "@/lib/types";
 
-type TabId = "overview" | "plan" | "script" | "metadata" | "assets";
+type TabId = "overview" | "plan" | "script" | "audio" | "metadata" | "assets";
 
 interface Tab {
   id: TabId;
@@ -222,6 +224,8 @@ export default function EpisodeDetailPage() {
 
   if (episode.script?.full_text) {
     tabs.push({ id: "script", label: "Script" });
+    // Show Audio tab when script exists (can preview/generate audio from script)
+    tabs.push({ id: "audio", label: "Audio" });
   }
 
   if (episode.metadata && Object.keys(episode.metadata).length > 0) {
@@ -509,31 +513,39 @@ export default function EpisodeDetailPage() {
         )}
 
         {/* Script Tab */}
-        {activeTab === "script" && episode.script?.full_text && (
+        {activeTab === "script" && (
           <div className="max-w-4xl">
+            <ScriptEditor
+              episodeId={episodeId}
+              script={episode.script}
+              onScriptUpdated={() => {
+                // Refresh episode data when script is updated
+                mutateEpisode();
+              }}
+            />
+          </div>
+        )}
+
+        {/* Audio Tab */}
+        {activeTab === "audio" && episode.script?.full_text && (
+          <div className="max-w-4xl space-y-6">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Full Script</CardTitle>
-                  <div className="flex items-center gap-4 text-sm text-gray-500">
-                    <span>{episode.script.word_count} words</span>
-                    <span>~{Math.round(episode.script.estimated_duration_seconds / 60)} min</span>
-                    {episode.script.model_used && (
-                      <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">
-                        {episode.script.model_used}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                <CardTitle>Voice Selection & Audio Generation</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="bg-gray-50 rounded-md p-6 max-h-[600px] overflow-y-auto">
-                  <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
-                    {episode.script.full_text}
-                  </pre>
-                </div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Select a voice and configure settings for audio generation. You can preview voices
+                  and test them with your script before generating the full episode audio.
+                </p>
               </CardContent>
             </Card>
+            <VoiceSelector
+              onSelect={(voiceId: string, settings: VoiceSettings) => {
+                // TODO: Store selected voice and settings, then trigger audio generation
+                console.log("Voice selected:", voiceId, settings);
+              }}
+            />
           </div>
         )}
 

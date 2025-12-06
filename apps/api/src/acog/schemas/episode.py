@@ -414,3 +414,59 @@ class EpisodeListResponse(ApiResponse[list[EpisodeResponse]]):
         if request_id:
             meta["request_id"] = request_id
         return cls(data=episodes, meta=meta)
+
+
+# =============================================================================
+# Script Revision Schemas
+# =============================================================================
+
+
+class ScriptRevisionRequest(BaseModel):
+    """Request schema for script revision."""
+
+    instructions: str = Field(
+        min_length=1,
+        max_length=2000,
+        description="Instructions for how to revise the script",
+    )
+
+
+class ScriptRevisionResponse(BaseModel):
+    """Response schema for script revision."""
+
+    proposed_revision: str = Field(description="The proposed revised script")
+    original_script: str = Field(description="The original script before revision")
+    revision_instructions: str = Field(description="The instructions used for revision")
+    model_used: str = Field(description="The OpenAI model used for revision")
+
+
+class ScriptAcceptResponse(BaseModel):
+    """Response schema for accepting a script revision."""
+
+    version: int = Field(description="The new script version number")
+    word_count: int = Field(description="Word count of the accepted script")
+    message: str = Field(description="Confirmation message")
+
+
+class ScriptVersionInfo(BaseModel):
+    """Information about a single script version."""
+
+    version: int = Field(description="Version number")
+    word_count: int = Field(description="Word count")
+    estimated_duration_seconds: int = Field(description="Estimated duration in seconds")
+    created_at: str = Field(description="ISO timestamp of when version was created")
+    model_used: str = Field(description="Model used to generate this version")
+
+
+class ScriptRestoreRequest(BaseModel):
+    """Request schema for restoring a script version."""
+
+    version: int = Field(ge=1, description="Version number to restore")
+
+
+class ScriptRestoreResponse(BaseModel):
+    """Response schema for restoring a script version."""
+
+    restored_version: int = Field(description="The version that was restored")
+    new_version: int = Field(description="The new version number after restore")
+    message: str = Field(description="Confirmation message")

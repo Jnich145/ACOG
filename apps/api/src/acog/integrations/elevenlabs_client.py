@@ -94,7 +94,7 @@ class Voice:
     def from_api_response(cls, data: dict[str, Any]) -> "Voice":
         """Create Voice from API response."""
         settings = None
-        if "settings" in data:
+        if data.get("settings"):
             settings = VoiceSettings(
                 stability=data["settings"].get("stability", 0.5),
                 similarity_boost=data["settings"].get("similarity_boost", 0.75),
@@ -332,9 +332,13 @@ class ElevenLabsClient(SyncBaseHTTPClient):
         voices = []
         for voice_data in data.get("voices", []):
             try:
+                # Check is_legacy field from API response
+                is_legacy = voice_data.get("is_legacy", False)
+                if not show_legacy and is_legacy:
+                    continue
+
                 voice = Voice.from_api_response(voice_data)
-                if show_legacy or voice.category != "legacy":
-                    voices.append(voice)
+                voices.append(voice)
             except Exception as e:
                 logger.warning(
                     "Failed to parse voice data",
