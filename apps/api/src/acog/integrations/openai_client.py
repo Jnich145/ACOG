@@ -639,6 +639,46 @@ class OpenAIClient:
             original_error=error_msg,
         )
 
+    def _dereference_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
+        """
+        Dereference $ref pointers in a JSON schema.
+
+        OpenAI's structured output requires inline schemas without $ref.
+        This method resolves all $ref pointers to their definitions.
+
+        Args:
+            schema: JSON schema with potential $ref pointers
+
+        Returns:
+            Dereferenced schema with all $ref resolved inline
+        """
+        defs = schema.get("$defs", {})
+
+        def resolve_ref(obj: Any) -> Any:
+            if isinstance(obj, dict):
+                if "$ref" in obj:
+                    ref_path = obj["$ref"]
+                    # Handle #/$defs/TypeName format
+                    if ref_path.startswith("#/$defs/"):
+                        type_name = ref_path.split("/")[-1]
+                        if type_name in defs:
+                            # Return a copy of the definition (resolved recursively)
+                            return resolve_ref(defs[type_name].copy())
+                    return obj
+                return {k: resolve_ref(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [resolve_ref(item) for item in obj]
+            return obj
+
+        # Resolve all refs in the schema
+        resolved = resolve_ref(schema)
+
+        # Remove $defs as they're now inlined
+        if "$defs" in resolved:
+            del resolved["$defs"]
+
+        return resolved
+
     def complete_with_schema(
         self,
         messages: list[dict[str, str]],
@@ -671,8 +711,9 @@ class OpenAIClient:
             ExternalServiceError: If generation fails or response doesn't match schema
             ValidationError: If response fails Pydantic validation
         """
-        # Get JSON schema from Pydantic model
+        # Get JSON schema from Pydantic model and dereference $refs
         json_schema = response_model.model_json_schema()
+        json_schema = self._dereference_schema(json_schema)
 
         result = self.complete_json(
             messages=messages,

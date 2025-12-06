@@ -75,6 +75,21 @@ class ThumbnailPrompt(BaseModel):
     )
 
 
+class VideoChapter(BaseModel):
+    """A chapter/timestamp marker in the video."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    timestamp_seconds: int = Field(
+        description="Timestamp in seconds from video start",
+        ge=0,
+    )
+    title: str = Field(
+        description="Chapter title (max 100 characters)",
+        max_length=100,
+    )
+
+
 class SocialPost(BaseModel):
     """Social media post for promoting the video."""
 
@@ -132,8 +147,8 @@ class VideoMetadata(BaseModel):
         description="Index of recommended thumbnail (0-based)",
         ge=0,
     )
-    chapters: list[dict[str, Any]] = Field(
-        description="Video chapters with timestamps (timestamp in seconds, title); empty list if none"
+    chapters: list[VideoChapter] = Field(
+        description="Video chapters with timestamps (empty list if none)"
     )
     end_screen_cta: str = Field(
         description="Call-to-action for end screen"
@@ -496,7 +511,7 @@ Focus on:
                 "category": metadata.category,
                 "thumbnail_prompts": [t.model_dump() for t in metadata.thumbnail_prompts],
                 "recommended_thumbnail_index": metadata.recommended_thumbnail,
-                "chapters": metadata.chapters,
+                "chapters": [c.model_dump() for c in metadata.chapters],
                 "end_screen_cta": metadata.end_screen_cta,
                 "pinned_comment": metadata.pinned_comment,
                 "social_posts": [s.model_dump() for s in metadata.social_posts],

@@ -678,6 +678,9 @@ def run_stage_1_pipeline(
         - total_tokens_used: Total tokens used across all stages
         - error: Error message if failed
     """
+    from datetime import UTC, datetime
+    from acog.models import Job, JobStatus
+
     logger.info(
         f"[Stage 1 Pipeline] Starting for episode {episode_id}",
         extra={
@@ -685,6 +688,9 @@ def run_stage_1_pipeline(
             "stages": [s.value for s in STAGE_1_STAGES],
         },
     )
+
+    # Find the parent job for this task (if exists) to update its status
+    parent_job_id = None
 
     with get_db_session() as db:
         # Verify episode exists and is in valid state
@@ -705,6 +711,22 @@ def run_stage_1_pipeline(
                     "allowed_statuses": ["idea", "failed", "cancelled"],
                 },
             )
+
+        # Find the parent job by celery_task_id and update to RUNNING
+        if self.request.id:
+            parent_job = db.query(Job).filter(
+                Job.celery_task_id == self.request.id,
+                Job.stage == "stage_1_pipeline",
+            ).first()
+            if parent_job:
+                parent_job_id = str(parent_job.id)
+                parent_job.status = JobStatus.RUNNING
+                parent_job.started_at = datetime.now(UTC)
+                db.commit()
+                logger.info(
+                    f"[Stage 1 Pipeline] Updated parent job {parent_job_id} to RUNNING",
+                    extra={"job_id": parent_job_id},
+                )
 
         # Reset episode state if retrying from failed
         if episode.status in [EpisodeStatus.FAILED, EpisodeStatus.CANCELLED]:
@@ -754,6 +776,16 @@ def run_stage_1_pipeline(
                     },
                 )
 
+                # Update parent job to failed
+                if parent_job_id:
+                    with get_db_session() as db:
+                        parent_job = db.query(Job).filter(Job.id == parent_job_id).first()
+                        if parent_job:
+                            parent_job.status = JobStatus.FAILED
+                            parent_job.error_message = error_msg
+                            parent_job.completed_at = datetime.now(UTC)
+                            db.commit()
+
                 return format_task_result(
                     stage="stage_1_pipeline",
                     episode_id=episode_id,
@@ -770,6 +802,23 @@ def run_stage_1_pipeline(
             total_cost_usd += result.get("cost_usd", 0)
             total_tokens_used += result.get("tokens_used", 0)
             all_asset_ids.extend(result.get("asset_ids", []))
+
+            # If stage was already completed (skipped), ensure episode status is updated
+            # This handles the case where episode was reset to IDEA but stages are already done
+            if result.get("already_completed", False):
+                stage_status_map = {
+                    "planning": EpisodeStatus.PLANNING,
+                    "scripting": EpisodeStatus.SCRIPT_REVIEW,
+                    "metadata": EpisodeStatus.READY,
+                }
+                if stage_name in stage_status_map:
+                    with get_db_session() as db:
+                        update_episode_status(db, episode_id, stage_status_map[stage_name])
+                        db.commit()
+                    logger.info(
+                        f"[Stage 1 Pipeline] Synced episode status to {stage_status_map[stage_name].value} after skipped stage '{stage_name}'",
+                        extra={"episode_id": episode_id, "stage": stage_name},
+                    )
 
             logger.info(
                 f"[Stage 1 Pipeline] Stage '{stage_name}' completed for episode {episode_id}",
@@ -798,6 +847,13 @@ def run_stage_1_pipeline(
                 update_episode_status(
                     db, episode_id, EpisodeStatus.FAILED, last_error=error_msg
                 )
+                # Update parent job to failed
+                if parent_job_id:
+                    parent_job = db.query(Job).filter(Job.id == parent_job_id).first()
+                    if parent_job:
+                        parent_job.status = JobStatus.FAILED
+                        parent_job.error_message = error_msg
+                        parent_job.completed_at = datetime.now(UTC)
                 db.commit()
 
             return format_task_result(
@@ -811,7 +867,23 @@ def run_stage_1_pipeline(
                 error=error_msg,
             )
 
-    # All stages completed successfully
+    # All stages completed successfully - update parent job
+    if parent_job_id:
+        with get_db_session() as db:
+            parent_job = db.query(Job).filter(Job.id == parent_job_id).first()
+            if parent_job:
+                parent_job.status = JobStatus.COMPLETED
+                parent_job.completed_at = datetime.now(UTC)
+                parent_job.result = {
+                    "stages_completed": stages_completed,
+                    "total_cost_usd": total_cost_usd,
+                    "total_tokens_used": total_tokens_used,
+                    "asset_ids": all_asset_ids,
+                }
+                parent_job.cost_usd = total_cost_usd
+                parent_job.tokens_used = total_tokens_used
+                db.commit()
+
     logger.info(
         f"[Stage 1 Pipeline] Completed successfully for episode {episode_id}",
         extra={
