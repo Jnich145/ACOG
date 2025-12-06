@@ -21,8 +21,38 @@ interface EpisodeFailurePanelProps {
 const RETRYABLE_STAGES = new Set<string>(PIPELINE_STAGES);
 
 /**
+ * Finds the most recent failed job that hasn't been superseded by a newer
+ * successful or in-progress job for the same stage.
+ */
+function findActiveFailure(jobs: Job[]): Job | undefined {
+  // Group jobs by stage to find the most recent job per stage
+  const latestByStage = new Map<string, Job>();
+
+  for (const job of jobs) {
+    // Only consider valid pipeline stages
+    if (!RETRYABLE_STAGES.has(job.stage)) continue;
+
+    const existing = latestByStage.get(job.stage);
+    if (!existing) {
+      latestByStage.set(job.stage, job);
+    }
+    // Jobs are sorted by created_at desc, so first one seen is the latest
+  }
+
+  // Find a stage where the latest job is failed
+  for (const job of latestByStage.values()) {
+    if (job.status === "failed") {
+      return job;
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Displays failure information for the most recent failed job.
- * Only renders when there is at least one failed job with a valid pipeline stage.
+ * Only renders when the latest job for a stage is failed.
+ * If a retry succeeds or is in progress, the failure panel disappears.
  * Excludes orchestrator pseudo-stages (stage_1_pipeline, full_pipeline) since they
  * cannot be directly retried through the trigger endpoint.
  */
@@ -41,14 +71,10 @@ export function EpisodeFailurePanel({
     return null;
   }
 
-  // Find the most recent failed job with a valid pipeline stage
-  // Jobs are sorted by created_at desc from API
-  // Exclude orchestrator pseudo-stages that can't be retried directly
-  const failedJob = jobs.find(
-    (job) => job.status === "failed" && RETRYABLE_STAGES.has(job.stage)
-  );
+  // Find the most recent failed job that hasn't been superseded
+  const failedJob = findActiveFailure(jobs);
 
-  // No failed jobs - don't render anything
+  // No active failures - don't render anything
   if (!failedJob) {
     return null;
   }
