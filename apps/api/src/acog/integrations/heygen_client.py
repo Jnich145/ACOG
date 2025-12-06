@@ -39,6 +39,7 @@ class VideoStatus(str, Enum):
     """HeyGen video generation status values."""
 
     PENDING = "pending"
+    WAITING = "waiting"  # Queued for processing
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -177,6 +178,8 @@ class VideoGenerationJob:
             status = VideoStatus.COMPLETED
         elif status_str in ("processing", "in_progress", "running"):
             status = VideoStatus.PROCESSING
+        elif status_str in ("waiting", "queued"):
+            status = VideoStatus.WAITING
         elif status_str in ("failed", "error"):
             status = VideoStatus.FAILED
 

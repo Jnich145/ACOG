@@ -46,18 +46,27 @@ class GenerationStatus(str, Enum):
 
 
 class AspectRatio(str, Enum):
-    """Supported aspect ratios for video generation."""
+    """
+    Supported aspect ratios for video generation.
 
-    LANDSCAPE = "16:9"
-    PORTRAIT = "9:16"
-    SQUARE = "1:1"
-    CINEMATIC = "21:9"
+    Note: Runway API accepts both formats:
+    - Simple ratio strings: "16:9", "9:16", "1:1"
+    - Resolution format: "1280:720", "720:1280", "1024:1024"
+
+    This enum uses the simple format which the API normalizes internally.
+    """
+
+    LANDSCAPE = "16:9"  # Also accepts "1280:720"
+    PORTRAIT = "9:16"  # Also accepts "720:1280"
+    SQUARE = "1:1"  # Also accepts "1024:1024"
+    CINEMATIC = "21:9"  # Also accepts "1280:549"
 
 
 class RunwayModel(str, Enum):
     """Available Runway generation models."""
 
-    GEN3_ALPHA = "gen3a_turbo"  # Latest fast model
+    GEN4_TURBO = "gen4_turbo"  # Latest Gen-4 fast model
+    GEN3A_TURBO = "gen3a_turbo"  # Gen-3 Alpha fast model
     GEN3 = "gen3"  # Standard Gen-3
     GEN2 = "gen2"  # Legacy Gen-2
 
@@ -241,7 +250,7 @@ class RunwayClient(SyncBaseHTTPClient):
         self,
         api_key: str | None = None,
         settings: Settings | None = None,
-        model: RunwayModel = RunwayModel.GEN3_ALPHA,
+        model: RunwayModel = RunwayModel.GEN3A_TURBO,
         max_retries: int = 3,
         timeout: float = 60.0,
         poll_interval: float = 10.0,
@@ -366,7 +375,8 @@ class RunwayClient(SyncBaseHTTPClient):
             },
         )
 
-        response = self._post("image_to_video", json_data=payload)
+        # Use text_to_video endpoint for text-only prompts
+        response = self._post("text_to_video", json_data=payload)
         data = response.json()
 
         # Extract generation ID
