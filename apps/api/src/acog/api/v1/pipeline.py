@@ -403,6 +403,8 @@ async def get_pipeline_status(
                 }
                 for j in jobs
                 if j.status in [JobStatus.QUEUED, JobStatus.RUNNING]
+                # Exclude orchestrator pseudo-stages (full_pipeline, stage_1)
+                and j.stage in [s.value for s in PipelineStage]
             ],
         }
     )
