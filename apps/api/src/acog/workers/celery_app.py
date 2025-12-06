@@ -32,6 +32,7 @@ celery_app = Celery(
     include=[
         "acog.workers.tasks.pipeline",
         "acog.workers.tasks.orchestrator",
+        "acog.workers.tasks.maintenance",
     ],
 )
 
@@ -199,8 +200,15 @@ celery_app.conf.update(
 # Celery Beat Configuration (for scheduled tasks)
 # =============================================================================
 
-# Beat schedule for periodic tasks (currently empty, can be extended)
-celery_app.conf.beat_schedule = {}
+# Beat schedule for periodic tasks
+celery_app.conf.beat_schedule = {
+    # Clean up orphaned jobs every 5 minutes
+    "cleanup-orphaned-jobs": {
+        "task": "acog.workers.tasks.maintenance.cleanup_orphaned_jobs",
+        "schedule": 300.0,  # Every 5 minutes
+        "options": {"queue": "default"},
+    },
+}
 
 # =============================================================================
 # Task Base Class Configuration

@@ -821,11 +821,13 @@ async def cancel_episode_jobs(
     summary="Cancel Stale Jobs (System-wide)",
     description=(
         "Cancel all jobs that have been stuck in queued/running state for too long. "
-        "Default threshold is 30 minutes."
+        "Default threshold is 30 minutes. Only cancels jobs whose Celery tasks are no "
+        "longer running unless force=true."
     ),
 )
 async def cancel_stale_jobs(
     max_age_minutes: int = 30,
+    force: bool = False,
     db: Session = Depends(get_db),
 ) -> ApiResponse[dict[str, Any]]:
     """
@@ -834,14 +836,19 @@ async def cancel_stale_jobs(
     Jobs are considered stale if they've been in queued/running state
     for longer than the specified threshold.
 
+    By default, only cancels jobs whose Celery tasks are no longer active.
+    Use force=true to cancel all stale jobs regardless of Celery state.
+
     Args:
         max_age_minutes: Maximum age in minutes before a job is considered stale
+        force: Force cancel even if Celery task appears to be running
         db: Database session
 
     Returns:
         Count of cancelled jobs and details
     """
     from datetime import timedelta
+    from acog.workers.tasks.maintenance import is_task_actually_running
 
     cutoff_time = datetime.now(UTC) - timedelta(minutes=max_age_minutes)
 
@@ -856,8 +863,24 @@ async def cancel_stale_jobs(
     )
 
     cancelled_details = []
+    skipped_count = 0
+
     for job in stale_jobs:
         age_minutes = (datetime.now(UTC) - job.created_at.replace(tzinfo=UTC)).total_seconds() / 60
+
+        # Check if Celery task is actually running (unless force=true)
+        if not force and is_task_actually_running(job):
+            skipped_count += 1
+            logger.info(
+                f"Skipping stale job {job.id} - Celery task still running",
+                extra={
+                    "job_id": str(job.id),
+                    "celery_task_id": job.celery_task_id,
+                    "age_minutes": age_minutes,
+                },
+            )
+            continue
+
         job.status = JobStatus.CANCELLED
         job.error_message = f"Cancelled: Stale job (age: {age_minutes:.0f} minutes)"
         job.completed_at = datetime.now(UTC)
@@ -881,11 +904,16 @@ async def cancel_stale_jobs(
 
     db.commit()
 
+    message = f"Cancelled {len(cancelled_details)} stale job(s) older than {max_age_minutes} minutes"
+    if skipped_count > 0:
+        message += f" (skipped {skipped_count} with active Celery tasks)"
+
     return ApiResponse(
         data={
             "cancelled_count": len(cancelled_details),
             "threshold_minutes": max_age_minutes,
+            "skipped_count": skipped_count,
             "cancelled_jobs": cancelled_details,
-            "message": f"Cancelled {len(cancelled_details)} stale job(s) older than {max_age_minutes} minutes",
+            "message": message,
         }
     )
