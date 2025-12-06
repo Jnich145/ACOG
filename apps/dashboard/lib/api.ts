@@ -392,6 +392,61 @@ export const api = {
    */
   getAudioSubscription: () =>
     fetcher<ApiResponse<Record<string, unknown>>>("/audio/subscription"),
+
+  // =========================================================================
+  // Script Revision
+  // =========================================================================
+
+  /**
+   * Request a script revision with instructions
+   */
+  reviseScript: (episodeId: string, instructions: string) =>
+    fetcher<ApiResponse<{
+      proposed_revision: string;
+      original_script: string;
+      revision_instructions: string;
+      model_used: string;
+    }>>(`/episodes/${episodeId}/script/revise`, {
+      method: "POST",
+      body: JSON.stringify({ instructions }),
+    }),
+
+  /**
+   * Accept the proposed script revision
+   */
+  acceptScriptRevision: (episodeId: string) =>
+    fetcher<ApiResponse<{
+      version: number;
+      word_count: number;
+      message: string;
+    }>>(`/episodes/${episodeId}/script/accept`, {
+      method: "POST",
+    }),
+
+  /**
+   * Get script version history
+   */
+  getScriptVersions: (episodeId: string) =>
+    fetcher<ApiResponse<Array<{
+      version: number;
+      word_count: number;
+      estimated_duration_seconds: number;
+      created_at: string;
+      model_used: string;
+    }>>>(`/episodes/${episodeId}/script/versions`),
+
+  /**
+   * Restore a previous script version
+   */
+  restoreScriptVersion: (episodeId: string, version: number) =>
+    fetcher<ApiResponse<{
+      restored_version: number;
+      new_version: number;
+      message: string;
+    }>>(`/episodes/${episodeId}/script/restore`, {
+      method: "POST",
+      body: JSON.stringify({ version }),
+    }),
 };
 
 /**

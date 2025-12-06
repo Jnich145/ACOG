@@ -7,3 +7,4 @@ export { useEpisode } from "./useEpisode";
 export { usePipelineStatus } from "./usePipelineStatus";
 export { useAssets } from "./useAssets";
 export { useJobs } from "./useJobs";
+export { useVoices } from "./useVoices";

@@ -346,6 +346,26 @@ class EpisodeResponse(BaseModel):
                 stages=stages,
             )
 
+        # Build script content from script text and script_metadata
+        script_content = None
+        if include_script and episode.script:
+            script_meta = episode.script_metadata or {}
+            # Count words in script
+            word_count = len(episode.script.split()) if episode.script else 0
+            # Estimate duration (150 words per minute average speaking rate)
+            estimated_duration = (word_count / 150) * 60 if word_count > 0 else 0
+
+            script_content = ScriptContent(
+                version=script_meta.get("version", 1),
+                status=script_meta.get("status", "generated"),
+                full_text=episode.script,
+                segments=[],  # Segments would need to be parsed from script markers
+                word_count=script_meta.get("word_count", word_count),
+                estimated_duration_seconds=script_meta.get("estimated_duration_seconds", estimated_duration),
+                generated_at=script_meta.get("generated_at"),
+                model_used=script_meta.get("model_used"),
+            )
+
         return cls(
             id=episode.id,
             channel_id=episode.channel_id,
@@ -361,7 +381,7 @@ class EpisodeResponse(BaseModel):
             notes=episode.idea.get("notes"),
             auto_advance=episode.idea.get("auto_advance", False),
             plan=episode.plan if include_plan else None,
-            script=None,  # Would need to parse from episode.script
+            script=script_content,
             metadata=episode.episode_meta,
             pipeline_state=pipeline_state,
             asset_count=episode.asset_count if hasattr(episode, "asset_count") else 0,

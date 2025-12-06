@@ -283,7 +283,7 @@ async def generate_audio_preview(
 
 @router.post(
     "/preview/stream",
-    summary="Stream Audio Preview",
+    summary="Stream Audio Preview (POST)",
     description="Generate audio preview with streaming response for real-time playback.",
 )
 async def stream_audio_preview(
@@ -291,7 +291,7 @@ async def stream_audio_preview(
     settings: Settings = Depends(get_settings),
 ) -> StreamingResponse:
     """
-    Generate audio with streaming response.
+    Generate audio with streaming response (POST version).
 
     Returns audio data as it's generated, enabling real-time playback
     in the browser without waiting for full generation.
@@ -309,6 +309,54 @@ async def stream_audio_preview(
             for chunk in client.generate_speech_stream(
                 text=request.text,
                 voice_id=request.voice_id,
+                voice_settings=voice_settings,
+            ):
+                yield chunk
+        finally:
+            client.close()
+
+    return StreamingResponse(
+        audio_stream(),
+        media_type="audio/mpeg",
+        headers={
+            "Content-Disposition": "inline; filename=preview.mp3",
+            "Cache-Control": "no-cache",
+        },
+    )
+
+
+@router.get(
+    "/preview/stream",
+    summary="Stream Audio Preview (GET)",
+    description="Generate audio preview with streaming response. GET version for browser audio elements.",
+)
+async def stream_audio_preview_get(
+    text: str = Query(..., min_length=1, max_length=5000, description="Text to convert to speech"),
+    voice_id: str = Query(..., description="ElevenLabs voice ID"),
+    stability: float = Query(default=0.5, ge=0.0, le=1.0, description="Voice stability"),
+    similarity_boost: float = Query(default=0.75, ge=0.0, le=1.0, description="Speaker similarity"),
+    style: float = Query(default=0.0, ge=0.0, le=1.0, description="Style exaggeration"),
+    settings: Settings = Depends(get_settings),
+) -> StreamingResponse:
+    """
+    Generate audio with streaming response (GET version).
+
+    This GET endpoint allows browser audio elements to directly use the URL
+    as their src attribute for streaming audio playback.
+    """
+    client = get_elevenlabs_or_error(settings)
+
+    voice_settings = VoiceSettings(
+        stability=stability,
+        similarity_boost=similarity_boost,
+        style=style,
+    )
+
+    def audio_stream():
+        try:
+            for chunk in client.generate_speech_stream(
+                text=text,
+                voice_id=voice_id,
                 voice_settings=voice_settings,
             ):
                 yield chunk
