@@ -1899,6 +1899,23 @@ def run_broll_stage(
                 cost_usd=total_cost,
             )
 
+            # B-roll is currently the last implemented stage in the full pipeline.
+            # Check if all implemented stages are complete and set status to READY.
+            # This provides a clear "pipeline done" state without requiring separate finalization.
+            episode = get_episode_with_channel(db, episode_id)
+            if episode:
+                from acog.workers.tasks.orchestrator import PIPELINE_STAGE_ORDER
+                all_complete = all(
+                    episode.is_stage_complete(s.value)
+                    for s in PIPELINE_STAGE_ORDER
+                )
+                if all_complete:
+                    update_episode_status(db, episode_id, EpisodeStatus.READY)
+                    logger.info(
+                        f"All pipeline stages complete for episode {episode_id}, status set to READY",
+                        extra={"episode_id": episode_id},
+                    )
+
             db.commit()
 
             logger.info(

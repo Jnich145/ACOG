@@ -331,7 +331,7 @@ export default function EpisodeDetailPage() {
                     )}
                     <div>
                       <dt className="text-gray-500">Assets</dt>
-                      <dd className="mt-1 text-gray-900">{episode.asset_count}</dd>
+                      <dd className="mt-1 text-gray-900">{assets?.length ?? episode.asset_count}</dd>
                     </div>
                     <div>
                       <dt className="text-gray-500">Created</dt>

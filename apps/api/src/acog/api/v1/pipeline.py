@@ -33,6 +33,7 @@ from acog.workers.tasks.pipeline import (
 from acog.workers.tasks.orchestrator import (
     run_stage_1_pipeline,
     run_full_pipeline,
+    PIPELINE_STAGE_ORDER,
 )
 
 logger = logging.getLogger(__name__)
@@ -347,8 +348,11 @@ async def get_pipeline_status(
         .all()
     )
 
-    # Build stage status summary
+    # Build stage status summary for ALL stages (for display)
+    # but track progress only for implemented stages
     stage_summary = {}
+    implemented_stage_values = {s.value for s in PIPELINE_STAGE_ORDER}
+
     for stage in PipelineStage:
         stage_jobs = [j for j in jobs if j.stage == stage.value]
         if stage_jobs:
@@ -373,11 +377,13 @@ async def get_pipeline_status(
                 "attempts": 0,
             }
 
-    # Calculate overall progress
+    # Calculate overall progress - only count implemented stages
+    # PIPELINE_STAGE_ORDER defines the currently implemented stages
     completed_stages = sum(
-        1 for s in stage_summary.values() if s["status"] == "completed"
+        1 for stage in PIPELINE_STAGE_ORDER
+        if stage_summary.get(stage.value, {}).get("status") == "completed"
     )
-    total_stages = len(PipelineStage)
+    total_stages = len(PIPELINE_STAGE_ORDER)
 
     return ApiResponse(
         data={

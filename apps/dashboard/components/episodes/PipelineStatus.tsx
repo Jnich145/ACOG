@@ -10,17 +10,15 @@ import type {
   PipelineStageInfo,
 } from "@/lib/types";
 
-// Pipeline stages in order
+// Pipeline stages in order - currently implemented stages
+// Future stages (script_review, assembly, upload) are not yet implemented
 const PIPELINE_STAGES = [
   "planning",
   "scripting",
-  "script_review",
   "metadata",
   "audio",
   "avatar",
   "broll",
-  "assembly",
-  "upload",
 ];
 
 interface PipelineStatusProps {
