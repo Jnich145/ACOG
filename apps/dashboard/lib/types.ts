@@ -390,3 +390,66 @@ export const STAGE_STATUS_CONFIG: Record<
   failed: { label: "Failed", color: "text-red-600", bgColor: "bg-red-100" },
   skipped: { label: "Skipped", color: "text-gray-500", bgColor: "bg-gray-100" },
 };
+
+// ============================================================================
+// Voice/Audio Types (ElevenLabs)
+// ============================================================================
+
+export interface VoiceSettings {
+  stability: number;
+  similarity_boost: number;
+  style: number;
+  use_speaker_boost?: boolean;
+}
+
+export interface Voice {
+  voice_id: string;
+  name: string;
+  category: string;
+  description: string | null;
+  labels: Record<string, string>;
+  preview_url: string | null;
+  settings: VoiceSettings | null;
+}
+
+export interface VoiceListResponse {
+  voices: Voice[];
+  total: number;
+}
+
+export interface AudioPreviewRequest {
+  text: string;
+  voice_id: string;
+  stability?: number;
+  similarity_boost?: number;
+  style?: number;
+}
+
+export interface AudioPreviewResponse {
+  audio_base64: string;
+  content_type: string;
+  character_count: number;
+  estimated_duration_seconds: number;
+  estimated_cost_usd: number;
+  voice_id: string;
+  model_id: string;
+}
+
+export interface EpisodeAudioRequest {
+  voice_id?: string;
+  stability?: number;
+  similarity_boost?: number;
+  style?: number;
+  save_to_storage?: boolean;
+}
+
+export interface EpisodeAudioResponse {
+  episode_id: string;
+  audio_base64?: string;
+  storage_uri?: string;
+  character_count: number;
+  estimated_duration_seconds: number;
+  estimated_cost_usd: number;
+  voice_id: string;
+  model_id: string;
+}

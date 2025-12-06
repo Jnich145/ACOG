@@ -15,6 +15,12 @@ import type {
   Job,
   PipelineStatusResponse,
   PipelineTriggerResponse,
+  VoiceListResponse,
+  Voice,
+  AudioPreviewRequest,
+  AudioPreviewResponse,
+  EpisodeAudioRequest,
+  EpisodeAudioResponse,
 } from "./types";
 
 const API_BASE =
@@ -292,6 +298,100 @@ export const api = {
    */
   getHealth: () =>
     fetcher<{ status: string; version?: string }>("/health"),
+
+  // =========================================================================
+  // Audio / Voice (ElevenLabs)
+  // =========================================================================
+
+  /**
+   * List all available voices from ElevenLabs
+   */
+  getVoices: (showLegacy: boolean = false) =>
+    fetcher<ApiResponse<VoiceListResponse>>(
+      `/audio/voices${showLegacy ? "?show_legacy=true" : ""}`
+    ),
+
+  /**
+   * Get details for a specific voice
+   */
+  getVoice: (voiceId: string) =>
+    fetcher<ApiResponse<Voice>>(`/audio/voices/${voiceId}`),
+
+  /**
+   * Get default voice IDs mapping
+   */
+  getDefaultVoices: () =>
+    fetcher<ApiResponse<Record<string, string>>>("/audio/voices/defaults"),
+
+  /**
+   * Get available TTS models
+   */
+  getAudioModels: () =>
+    fetcher<ApiResponse<Record<string, string>>>("/audio/models"),
+
+  /**
+   * Generate audio preview from text
+   */
+  generateAudioPreview: (request: AudioPreviewRequest) =>
+    fetcher<ApiResponse<AudioPreviewResponse>>("/audio/preview", {
+      method: "POST",
+      body: JSON.stringify(request),
+    }),
+
+  /**
+   * Get streaming audio preview URL (for direct playback)
+   * Returns the URL to stream audio from - use this with <audio> element
+   */
+  getAudioPreviewStreamUrl: (request: AudioPreviewRequest): string => {
+    const params = new URLSearchParams();
+    params.set("text", request.text);
+    params.set("voice_id", request.voice_id);
+    if (request.stability !== undefined) params.set("stability", String(request.stability));
+    if (request.similarity_boost !== undefined) params.set("similarity_boost", String(request.similarity_boost));
+    if (request.style !== undefined) params.set("style", String(request.style));
+    return `${API_BASE}/audio/preview/stream?${params.toString()}`;
+  },
+
+  /**
+   * Generate full episode audio
+   */
+  generateEpisodeAudio: (episodeId: string, request: EpisodeAudioRequest = {}) =>
+    fetcher<ApiResponse<EpisodeAudioResponse>>(
+      `/audio/episodes/${episodeId}/generate`,
+      {
+        method: "POST",
+        body: JSON.stringify(request),
+      }
+    ),
+
+  /**
+   * Preview episode audio (first 500 chars)
+   */
+  previewEpisodeAudio: (
+    episodeId: string,
+    options?: {
+      voice_id?: string;
+      stability?: number;
+      similarity_boost?: number;
+      style?: number;
+    }
+  ) => {
+    const params = new URLSearchParams();
+    if (options?.voice_id) params.set("voice_id", options.voice_id);
+    if (options?.stability !== undefined) params.set("stability", String(options.stability));
+    if (options?.similarity_boost !== undefined) params.set("similarity_boost", String(options.similarity_boost));
+    if (options?.style !== undefined) params.set("style", String(options.style));
+    const queryString = params.toString();
+    return fetcher<ApiResponse<AudioPreviewResponse>>(
+      `/audio/episodes/${episodeId}/preview${queryString ? `?${queryString}` : ""}`
+    );
+  },
+
+  /**
+   * Get ElevenLabs subscription info
+   */
+  getAudioSubscription: () =>
+    fetcher<ApiResponse<Record<string, unknown>>>("/audio/subscription"),
 };
 
 /**

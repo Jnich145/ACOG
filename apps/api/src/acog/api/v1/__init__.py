@@ -8,6 +8,7 @@ that is mounted at /api/v1.
 from fastapi import APIRouter
 
 from acog.api.v1.assets import router as assets_router
+from acog.api.v1.audio import router as audio_router
 from acog.api.v1.auth import router as auth_router
 from acog.api.v1.channels import router as channels_router
 from acog.api.v1.episodes import router as episodes_router
@@ -52,4 +53,9 @@ api_router.include_router(
     pipeline_router,
     prefix="/pipeline",
     tags=["Pipeline"],
+)
+api_router.include_router(
+    audio_router,
+    prefix="/audio",
+    tags=["Audio"],
 )
