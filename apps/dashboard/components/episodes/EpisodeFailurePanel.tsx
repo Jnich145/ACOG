@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { formatDate, snakeToTitle } from "@/lib/utils";
 import { api, isApiError } from "@/lib/api";
 import type { Job } from "@/lib/types";
+import { PIPELINE_STAGES } from "@/lib/types";
 
 interface EpisodeFailurePanelProps {
   jobs: Job[] | undefined;
@@ -15,9 +16,15 @@ interface EpisodeFailurePanelProps {
   onRetryStarted?: () => void;
 }
 
+// Valid pipeline stages that can be retried
+// Excludes orchestrator pseudo-stages like "stage_1_pipeline" and "full_pipeline"
+const RETRYABLE_STAGES = new Set<string>(PIPELINE_STAGES);
+
 /**
  * Displays failure information for the most recent failed job.
- * Only renders when there is at least one failed job.
+ * Only renders when there is at least one failed job with a valid pipeline stage.
+ * Excludes orchestrator pseudo-stages (stage_1_pipeline, full_pipeline) since they
+ * cannot be directly retried through the trigger endpoint.
  */
 export function EpisodeFailurePanel({
   jobs,
@@ -34,8 +41,12 @@ export function EpisodeFailurePanel({
     return null;
   }
 
-  // Find the most recent failed job (jobs are sorted by created_at desc from API)
-  const failedJob = jobs.find((job) => job.status === "failed");
+  // Find the most recent failed job with a valid pipeline stage
+  // Jobs are sorted by created_at desc from API
+  // Exclude orchestrator pseudo-stages that can't be retried directly
+  const failedJob = jobs.find(
+    (job) => job.status === "failed" && RETRYABLE_STAGES.has(job.stage)
+  );
 
   // No failed jobs - don't render anything
   if (!failedJob) {
