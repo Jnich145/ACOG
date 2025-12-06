@@ -1,10 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { LoadingText } from "@/components/ui/Spinner";
 import { Alert } from "@/components/ui/Alert";
 import { formatDuration, snakeToTitle } from "@/lib/utils";
+import { api, isApiError } from "@/lib/api";
 import type {
   PipelineStatusResponse,
   PipelineStageInfo,
@@ -26,6 +29,8 @@ interface PipelineStatusProps {
   isLoading: boolean;
   isError: boolean;
   error?: Error | null;
+  episodeId?: string;
+  onContinueStarted?: () => void;
 }
 
 export function PipelineStatus({
@@ -33,7 +38,70 @@ export function PipelineStatus({
   isLoading,
   isError,
   error,
+  episodeId,
+  onContinueStarted,
 }: PipelineStatusProps) {
+  const [isContinuing, setIsContinuing] = useState(false);
+  const [continueError, setContinueError] = useState<string | null>(null);
+
+  // Find the first non-completed stage (for "Continue from here" button)
+  const getFirstIncompleteStage = (): string | null => {
+    if (!status?.stages) return null;
+
+    for (const stageName of PIPELINE_STAGES) {
+      const stageInfo = status.stages[stageName];
+      if (!stageInfo || stageInfo.status !== "completed") {
+        return stageName;
+      }
+    }
+    return null;
+  };
+
+  // Check if we should show the continue button
+  // Show if: there's at least one completed stage AND at least one incomplete stage
+  // AND no jobs are currently running
+  const shouldShowContinue = (): boolean => {
+    if (!status?.stages || !episodeId) return false;
+
+    const hasCompleted = PIPELINE_STAGES.some(
+      (s) => status.stages[s]?.status === "completed"
+    );
+    const hasIncomplete = PIPELINE_STAGES.some(
+      (s) => status.stages[s]?.status !== "completed"
+    );
+    const hasActiveJobs = status.active_jobs && status.active_jobs.length > 0;
+
+    return hasCompleted && hasIncomplete && !hasActiveJobs;
+  };
+
+  const handleContinueFromStage = async (stage: string) => {
+    if (!episodeId) return;
+
+    setIsContinuing(true);
+    setContinueError(null);
+
+    try {
+      // First cancel any stale jobs for this episode
+      await api.cancelEpisodeJobs(episodeId);
+
+      // Then continue from the specified stage
+      await api.retryStage(episodeId, stage);
+
+      onContinueStarted?.();
+    } catch (err) {
+      if (isApiError(err)) {
+        setContinueError(err.message);
+      } else {
+        setContinueError("Failed to continue pipeline. Please try again.");
+      }
+    } finally {
+      setIsContinuing(false);
+    }
+  };
+
+  const firstIncompleteStage = getFirstIncompleteStage();
+  const showContinue = shouldShowContinue();
+
   if (isLoading) {
     return (
       <Card>
@@ -110,15 +178,28 @@ export function PipelineStatus({
           </div>
         )}
 
+        {/* Continue error */}
+        {continueError && (
+          <div className="mb-4">
+            <Alert variant="error" title="Failed to continue pipeline">
+              {continueError}
+            </Alert>
+          </div>
+        )}
+
         {/* Stage list */}
         <div className="space-y-1">
           {PIPELINE_STAGES.map((stageName) => {
             const stageInfo = stages[stageName];
+            const isFirstIncomplete = stageName === firstIncompleteStage;
             return (
               <StageRow
                 key={stageName}
                 name={stageName}
                 info={stageInfo}
+                showContinueButton={showContinue && isFirstIncomplete}
+                isContinuing={isContinuing}
+                onContinue={() => handleContinueFromStage(stageName)}
               />
             );
           })}
@@ -131,9 +212,12 @@ export function PipelineStatus({
 interface StageRowProps {
   name: string;
   info: PipelineStageInfo | undefined;
+  showContinueButton?: boolean;
+  isContinuing?: boolean;
+  onContinue?: () => void;
 }
 
-function StageRow({ name, info }: StageRowProps) {
+function StageRow({ name, info, showContinueButton, isContinuing, onContinue }: StageRowProps) {
   const status = info?.status || "pending";
   const hasError = status === "failed" && info?.error;
 
@@ -178,6 +262,17 @@ function StageRow({ name, info }: StageRowProps) {
           <span className="text-red-600 max-w-[200px] truncate" title={info.error || ""}>
             {info.error}
           </span>
+        )}
+        {showContinueButton && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onContinue}
+            loading={isContinuing}
+            className="text-xs py-1 px-2 h-auto"
+          >
+            Continue from here
+          </Button>
         )}
       </div>
     </div>

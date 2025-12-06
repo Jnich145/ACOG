@@ -443,6 +443,11 @@ export default function EpisodeDetailPage() {
                 isLoading={isLoadingPipeline}
                 isError={isPipelineError}
                 error={pipelineError}
+                episodeId={episodeId}
+                onContinueStarted={() => {
+                  setShouldPoll(true);
+                  Promise.all([mutateEpisode(), mutatePipeline(), mutateAssets()]);
+                }}
               />
 
               {/* Quick Stats */}

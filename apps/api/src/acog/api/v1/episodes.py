@@ -458,3 +458,171 @@ async def cancel_episode(
     db.refresh(episode)
 
     return ApiResponse(data=EpisodeResponse.from_model(episode))
+
+
+# =============================================================================
+# Script Revision Endpoints
+# =============================================================================
+
+
+from pydantic import BaseModel as PydanticBaseModel
+
+
+class ScriptRevisionRequest(PydanticBaseModel):
+    """Request body for script revision."""
+    instruction: str
+
+
+class ScriptAcceptRequest(PydanticBaseModel):
+    """Request body for accepting script revision."""
+    revised_script: str
+
+
+@router.post(
+    "/{episode_id}/script/revise",
+    response_model=ApiResponse[dict[str, Any]],
+    status_code=status.HTTP_200_OK,
+    summary="Request Script Revision",
+    description="Request a revision of the episode's script based on user instruction.",
+)
+async def revise_script(
+    episode_id: UUID,
+    request: ScriptRevisionRequest,
+    db: Session = Depends(get_db),
+) -> ApiResponse[dict[str, Any]]:
+    """
+    Request an AI-powered revision of the script.
+
+    This generates a revision proposal but does NOT automatically save it.
+    The user must call the accept endpoint to apply the changes.
+
+    Args:
+        episode_id: Episode unique identifier
+        instruction: User's instruction for what to revise
+        db: Database session
+
+    Returns:
+        Original script, revised script, and changes summary
+
+    Raises:
+        NotFoundError: If episode not found
+        ValidationError: If episode has no script
+    """
+    from acog.services.script_revision import get_script_revision_service
+
+    service = get_script_revision_service(db)
+    result = service.revise_script(episode_id, request.instruction)
+
+    return ApiResponse(
+        data={
+            "original_script": result.original_script,
+            "revised_script": result.revised_script,
+            "changes_summary": result.changes_summary,
+            "sections_modified": result.sections_modified,
+            "tokens_used": result.usage.total_tokens,
+            "cost_usd": float(result.usage.estimated_cost_usd),
+        }
+    )
+
+
+@router.post(
+    "/{episode_id}/script/accept",
+    response_model=ApiResponse[dict[str, Any]],
+    status_code=status.HTTP_200_OK,
+    summary="Accept Script Revision",
+    description="Accept a proposed script revision and save it.",
+)
+async def accept_script_revision(
+    episode_id: UUID,
+    request: ScriptAcceptRequest,
+    db: Session = Depends(get_db),
+) -> ApiResponse[dict[str, Any]]:
+    """
+    Accept and save a script revision.
+
+    This saves the current script to version history and applies the new script.
+
+    Args:
+        episode_id: Episode unique identifier
+        revised_script: The revised script content to save
+        db: Database session
+
+    Returns:
+        Version info after accepting
+
+    Raises:
+        NotFoundError: If episode not found
+    """
+    from acog.services.script_revision import get_script_revision_service
+
+    service = get_script_revision_service(db)
+    result = service.accept_revision(episode_id, request.revised_script)
+
+    return ApiResponse(data=result)
+
+
+@router.get(
+    "/{episode_id}/script/versions",
+    response_model=ApiResponse[list[dict[str, Any]]],
+    status_code=status.HTTP_200_OK,
+    summary="Get Script Versions",
+    description="Get version history for an episode's script.",
+)
+async def get_script_versions(
+    episode_id: UUID,
+    db: Session = Depends(get_db),
+) -> ApiResponse[list[dict[str, Any]]]:
+    """
+    Get script version history.
+
+    Args:
+        episode_id: Episode unique identifier
+        db: Database session
+
+    Returns:
+        List of script versions
+
+    Raises:
+        NotFoundError: If episode not found
+    """
+    from acog.services.script_revision import get_script_revision_service
+
+    service = get_script_revision_service(db)
+    versions = service.get_script_versions(episode_id)
+
+    return ApiResponse(data=versions)
+
+
+@router.post(
+    "/{episode_id}/script/restore",
+    response_model=ApiResponse[dict[str, Any]],
+    status_code=status.HTTP_200_OK,
+    summary="Restore Script Version",
+    description="Restore a previous version of the script.",
+)
+async def restore_script_version(
+    episode_id: UUID,
+    version: int = Query(description="Version number to restore"),
+    db: Session = Depends(get_db),
+) -> ApiResponse[dict[str, Any]]:
+    """
+    Restore a previous script version.
+
+    Args:
+        episode_id: Episode unique identifier
+        version: Version number to restore
+        db: Database session
+
+    Returns:
+        Info about the restoration
+
+    Raises:
+        NotFoundError: If episode not found
+        ValidationError: If version not found
+    """
+    from acog.services.script_revision import get_script_revision_service
+
+    service = get_script_revision_service(db)
+    result = service.restore_version(episode_id, version)
+
+    return ApiResponse(data=result)

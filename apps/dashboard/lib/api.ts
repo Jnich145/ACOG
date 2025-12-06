@@ -268,6 +268,65 @@ export const api = {
     ),
 
   // =========================================================================
+  // Script Revision
+  // =========================================================================
+
+  /**
+   * Request a script revision from AI
+   * Returns the original and revised scripts for comparison
+   */
+  reviseScript: (episodeId: string, instruction: string) =>
+    fetcher<ApiResponse<{
+      original_script: string;
+      revised_script: string;
+      changes_summary: string;
+      sections_modified: string[];
+      tokens_used: number;
+      cost_usd: number;
+    }>>(`/episodes/${episodeId}/script/revise`, {
+      method: "POST",
+      body: JSON.stringify({ instruction }),
+    }),
+
+  /**
+   * Accept a proposed script revision
+   * Saves current script to version history and applies the revision
+   */
+  acceptScriptRevision: (episodeId: string, revisedScript: string) =>
+    fetcher<ApiResponse<{
+      version: number;
+      word_count: number;
+      previous_versions_count: number;
+    }>>(`/episodes/${episodeId}/script/accept`, {
+      method: "POST",
+      body: JSON.stringify({ revised_script: revisedScript }),
+    }),
+
+  /**
+   * Get script version history for an episode
+   */
+  getScriptVersions: (episodeId: string) =>
+    fetcher<ApiResponse<Array<{
+      version: number;
+      script: string;
+      saved_at: string;
+      word_count?: number;
+      is_current?: boolean;
+    }>>>(`/episodes/${episodeId}/script/versions`),
+
+  /**
+   * Restore a previous script version
+   */
+  restoreScriptVersion: (episodeId: string, version: number) =>
+    fetcher<ApiResponse<{
+      version: number;
+      word_count: number;
+      previous_versions_count: number;
+    }>>(`/episodes/${episodeId}/script/restore?version=${version}`, {
+      method: "POST",
+    }),
+
+  // =========================================================================
   // Jobs
   // =========================================================================
 
