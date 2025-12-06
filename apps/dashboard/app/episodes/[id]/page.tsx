@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { LoadingScreen } from "@/components/ui/Spinner";
 import { Alert } from "@/components/ui/Alert";
-import { PipelineStatus, PlanViewer, MetadataViewer, EpisodeFailurePanel } from "@/components/episodes";
+import { PipelineStatus, PlanViewer, MetadataViewer, EpisodeFailurePanel, CostSummary } from "@/components/episodes";
 import { AssetList, AssetViewer } from "@/components/assets";
 import { useEpisode } from "@/hooks/useEpisode";
 import { usePipelineStatus } from "@/hooks/usePipelineStatus";
@@ -247,6 +247,12 @@ export default function EpisodeDetailPage() {
         jobs={jobs}
         isLoading={isLoadingJobs}
         isError={isJobsError}
+        episodeId={episodeId}
+        onRetryStarted={() => {
+          setShouldPoll(true);
+          // Refresh all data
+          Promise.all([mutateEpisode(), mutatePipeline(), mutateAssets()]);
+        }}
       />
 
       {/* Trigger Error Alert */}
@@ -429,6 +435,13 @@ export default function EpisodeDetailPage() {
                   )}
                 </div>
               )}
+
+              {/* Cost Summary */}
+              <CostSummary
+                jobs={jobs}
+                isLoading={isLoadingJobs}
+                isError={isJobsError}
+              />
             </div>
           </div>
         )}
