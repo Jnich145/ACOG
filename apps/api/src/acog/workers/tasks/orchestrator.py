@@ -181,12 +181,13 @@ def run_full_pipeline(
             task_func = STAGE_TASKS[stage.value]
 
             # Special handling for B-roll stage with max_clips parameter
+            # Use .si() (immutable signature) so previous task results aren't passed as args
             if stage == PipelineStage.BROLL:
                 tasks_to_chain.append(
-                    task_func.s(episode_id, None, broll_max_clips)
+                    task_func.si(episode_id, None, broll_max_clips)
                 )
             else:
-                tasks_to_chain.append(task_func.s(episode_id, None))
+                tasks_to_chain.append(task_func.si(episode_id, None))
 
             stages_to_run.append(stage.value)
 
@@ -350,12 +351,13 @@ def run_pipeline_from_stage(
             task_func = STAGE_TASKS[stage.value]
 
             # Special handling for B-roll stage
+            # Use .si() (immutable signature) so previous task results aren't passed as args
             if stage == PipelineStage.BROLL:
                 tasks_to_chain.append(
-                    task_func.s(episode_id, None, broll_max_clips)
+                    task_func.si(episode_id, None, broll_max_clips)
                 )
             else:
-                tasks_to_chain.append(task_func.s(episode_id, None))
+                tasks_to_chain.append(task_func.si(episode_id, None))
 
             stages_to_run.append(stage.value)
 

@@ -54,6 +54,332 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# Fake Media Generation Helpers (for media_mode="fake")
+# =============================================================================
+
+
+def _fake_audio_generation(
+    db,
+    episode_id: str,
+    job_id: str,
+    stage: str,
+    settings,
+) -> dict[str, Any]:
+    """
+    Generate a fake audio asset for development/testing.
+    Creates proper Job and Asset records without calling ElevenLabs.
+    """
+    from uuid import UUID
+    from acog.integrations import StorageClient
+
+    logger.info(
+        f"[FAKE MODE] Generating fake audio for episode {episode_id}",
+        extra={"episode_id": episode_id},
+    )
+
+    storage = StorageClient(settings=settings)
+
+    # Create minimal placeholder audio data (empty WAV header)
+    fake_audio_data = b"RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x44\xac\x00\x00\x88X\x01\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
+    fake_duration_ms = 60000  # 1 minute fake duration
+
+    # Upload to storage
+    storage_result = storage.upload_episode_asset(
+        data=fake_audio_data,
+        episode_id=UUID(episode_id),
+        asset_type="audio",
+        file_extension="wav",
+        content_type="audio/wav",
+    )
+
+    # Create asset record
+    asset = create_asset_record(
+        db=db,
+        episode_id=episode_id,
+        asset_type=AssetType.AUDIO,
+        uri=storage_result.uri,
+        storage_bucket=storage_result.bucket,
+        storage_key=storage_result.key,
+        provider="fake",
+        mime_type="audio/wav",
+        file_size_bytes=storage_result.file_size_bytes,
+        duration_ms=fake_duration_ms,
+        metadata={
+            "fake_mode": True,
+            "voice_id": "fake-voice",
+            "model_id": "fake-model",
+        },
+        is_primary=True,
+        name="Episode Audio (Fake)",
+    )
+
+    # Update job with success
+    update_job_status(
+        db=db,
+        job_id=job_id,
+        status=JobStatus.COMPLETED,
+        result={
+            "audio_generated": True,
+            "fake_mode": True,
+            "duration_ms": fake_duration_ms,
+            "asset_id": str(asset.id),
+        },
+        cost_usd=0.0,
+    )
+
+    # Update pipeline state
+    update_episode_pipeline_state(
+        db=db,
+        episode_id=episode_id,
+        stage=stage,
+        status="completed",
+        fake_mode=True,
+        duration_ms=fake_duration_ms,
+        cost_usd=0.0,
+    )
+
+    db.commit()
+
+    logger.info(
+        f"[FAKE MODE] Audio stage completed for episode {episode_id}",
+        extra={"episode_id": episode_id, "asset_id": str(asset.id)},
+    )
+
+    return format_task_result(
+        stage=stage,
+        episode_id=episode_id,
+        job_id=job_id,
+        success=True,
+        fake_mode=True,
+        asset_ids=[str(asset.id)],
+        cost_usd=0.0,
+        duration_seconds=fake_duration_ms / 1000.0,
+    )
+
+
+def _fake_avatar_generation(
+    db,
+    episode_id: str,
+    job_id: str,
+    stage: str,
+    settings,
+) -> dict[str, Any]:
+    """
+    Generate a fake avatar video asset for development/testing.
+    Creates proper Job and Asset records without calling HeyGen.
+    """
+    from uuid import UUID, uuid4
+    from acog.integrations import StorageClient
+
+    logger.info(
+        f"[FAKE MODE] Generating fake avatar video for episode {episode_id}",
+        extra={"episode_id": episode_id},
+    )
+
+    storage = StorageClient(settings=settings)
+
+    # Create minimal placeholder video data (not a valid video, just bytes)
+    fake_video_data = b"FAKE_VIDEO_PLACEHOLDER_DATA"
+    fake_duration_ms = 120000  # 2 minute fake duration
+    fake_video_id = f"fake-video-{uuid4().hex[:8]}"
+
+    # Upload to storage
+    storage_result = storage.upload_episode_asset(
+        data=fake_video_data,
+        episode_id=UUID(episode_id),
+        asset_type="avatar",
+        file_extension="mp4",
+        content_type="video/mp4",
+    )
+
+    # Create asset record
+    asset = create_asset_record(
+        db=db,
+        episode_id=episode_id,
+        asset_type=AssetType.AVATAR_VIDEO,
+        uri=storage_result.uri,
+        storage_bucket=storage_result.bucket,
+        storage_key=storage_result.key,
+        provider="fake",
+        provider_job_id=fake_video_id,
+        mime_type="video/mp4",
+        file_size_bytes=storage_result.file_size_bytes,
+        duration_ms=fake_duration_ms,
+        metadata={
+            "fake_mode": True,
+            "video_id": fake_video_id,
+            "avatar_id": "fake-avatar",
+        },
+        is_primary=True,
+        name="Episode Avatar Video (Fake)",
+    )
+
+    # Update job with success
+    update_job_status(
+        db=db,
+        job_id=job_id,
+        status=JobStatus.COMPLETED,
+        result={
+            "video_generated": True,
+            "fake_mode": True,
+            "video_id": fake_video_id,
+            "duration_ms": fake_duration_ms,
+            "asset_id": str(asset.id),
+        },
+        cost_usd=0.0,
+    )
+
+    # Update pipeline state
+    update_episode_pipeline_state(
+        db=db,
+        episode_id=episode_id,
+        stage=stage,
+        status="completed",
+        fake_mode=True,
+        video_id=fake_video_id,
+        duration_ms=fake_duration_ms,
+        cost_usd=0.0,
+    )
+
+    db.commit()
+
+    logger.info(
+        f"[FAKE MODE] Avatar stage completed for episode {episode_id}",
+        extra={"episode_id": episode_id, "asset_id": str(asset.id)},
+    )
+
+    return format_task_result(
+        stage=stage,
+        episode_id=episode_id,
+        job_id=job_id,
+        success=True,
+        fake_mode=True,
+        asset_ids=[str(asset.id)],
+        cost_usd=0.0,
+        duration_seconds=fake_duration_ms / 1000.0,
+        video_id=fake_video_id,
+    )
+
+
+def _fake_broll_generation(
+    db,
+    episode_id: str,
+    job_id: str,
+    stage: str,
+    settings,
+    max_clips: int = 3,
+) -> dict[str, Any]:
+    """
+    Generate fake B-roll video assets for development/testing.
+    Creates proper Job and Asset records without calling Runway.
+
+    # TODO: Consider adding partial success tracking if some clips fail in real mode
+    """
+    from uuid import UUID, uuid4
+    from acog.integrations import StorageClient
+
+    logger.info(
+        f"[FAKE MODE] Generating {max_clips} fake B-roll clips for episode {episode_id}",
+        extra={"episode_id": episode_id, "max_clips": max_clips},
+    )
+
+    storage = StorageClient(settings=settings)
+
+    asset_ids = []
+    total_duration_ms = 0
+    fake_clip_duration_ms = 4000  # 4 seconds per clip
+
+    for i in range(max_clips):
+        fake_video_data = f"FAKE_BROLL_CLIP_{i+1}_PLACEHOLDER".encode()
+        fake_generation_id = f"fake-broll-{uuid4().hex[:8]}"
+
+        # Upload to storage - use version to differentiate clips
+        storage_result = storage.upload_episode_asset(
+            data=fake_video_data,
+            episode_id=UUID(episode_id),
+            asset_type=f"broll_{i+1}",  # Use asset_type to differentiate clips
+            file_extension="mp4",
+            content_type="video/mp4",
+        )
+
+        # Create asset record
+        asset = create_asset_record(
+            db=db,
+            episode_id=episode_id,
+            asset_type=AssetType.B_ROLL,
+            uri=storage_result.uri,
+            storage_bucket=storage_result.bucket,
+            storage_key=storage_result.key,
+            provider="fake",
+            provider_job_id=fake_generation_id,
+            mime_type="video/mp4",
+            file_size_bytes=storage_result.file_size_bytes,
+            duration_ms=fake_clip_duration_ms,
+            metadata={
+                "fake_mode": True,
+                "generation_id": fake_generation_id,
+                "prompt": f"Fake B-roll clip {i+1}",
+                "clip_index": i,
+            },
+            is_primary=(i == 0),
+            name=f"B-Roll Clip {i+1} (Fake)",
+        )
+
+        asset_ids.append(str(asset.id))
+        total_duration_ms += fake_clip_duration_ms
+
+    # Update job with success
+    update_job_status(
+        db=db,
+        job_id=job_id,
+        status=JobStatus.COMPLETED,
+        result={
+            "broll_generated": True,
+            "fake_mode": True,
+            "clips_count": max_clips,
+            "total_duration_ms": total_duration_ms,
+            "asset_ids": asset_ids,
+        },
+        cost_usd=0.0,
+    )
+
+    # Update pipeline state
+    update_episode_pipeline_state(
+        db=db,
+        episode_id=episode_id,
+        stage=stage,
+        status="completed",
+        fake_mode=True,
+        clips_count=max_clips,
+        total_duration_ms=total_duration_ms,
+        cost_usd=0.0,
+    )
+
+    db.commit()
+
+    logger.info(
+        f"[FAKE MODE] B-roll stage completed for episode {episode_id}",
+        extra={
+            "episode_id": episode_id,
+            "clips_count": max_clips,
+            "asset_ids": asset_ids,
+        },
+    )
+
+    return format_task_result(
+        stage=stage,
+        episode_id=episode_id,
+        job_id=job_id,
+        success=True,
+        fake_mode=True,
+        asset_ids=asset_ids,
+        cost_usd=0.0,
+        duration_seconds=total_duration_ms / 1000.0,
+        clips_count=max_clips,
+    )
+
+
+# =============================================================================
 # Planning Stage Task
 # =============================================================================
 
@@ -895,6 +1221,16 @@ def run_audio_stage(
             update_episode_status(db, episode_id, EpisodeStatus.AUDIO)
             db.commit()
 
+            # Check for fake media mode
+            if settings.media_mode == "fake":
+                return _fake_audio_generation(
+                    db=db,
+                    episode_id=episode_id,
+                    job_id=job_id,
+                    stage=stage,
+                    settings=settings,
+                )
+
             # Get episode with channel for voice settings
             episode = get_episode_with_channel(db, episode_id)
             if not episode:
@@ -1155,6 +1491,16 @@ def run_avatar_stage(
             update_episode_pipeline_state(db, episode_id, stage, "running")
             update_episode_status(db, episode_id, EpisodeStatus.AVATAR)
             db.commit()
+
+            # Check for fake media mode
+            if settings.media_mode == "fake":
+                return _fake_avatar_generation(
+                    db=db,
+                    episode_id=episode_id,
+                    job_id=job_id,
+                    stage=stage,
+                    settings=settings,
+                )
 
             # Get episode with channel for avatar settings
             episode = get_episode_with_channel(db, episode_id)
@@ -1421,6 +1767,17 @@ def run_broll_stage(
             update_episode_pipeline_state(db, episode_id, stage, "running")
             update_episode_status(db, episode_id, EpisodeStatus.BROLL)
             db.commit()
+
+            # Check for fake media mode
+            if settings.media_mode == "fake":
+                return _fake_broll_generation(
+                    db=db,
+                    episode_id=episode_id,
+                    job_id=job_id,
+                    stage=stage,
+                    settings=settings,
+                    max_clips=max_clips,
+                )
 
             # Get episode
             episode = get_episode_with_channel(db, episode_id)

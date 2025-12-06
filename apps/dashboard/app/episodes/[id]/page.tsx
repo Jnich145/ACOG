@@ -107,6 +107,29 @@ export default function EpisodeDetailPage() {
     }
   };
 
+  const handleRunFullPipeline = async () => {
+    setIsTriggering(true);
+    setTriggerError(null);
+
+    try {
+      await api.runFullPipeline(episodeId);
+
+      // Start polling for status updates
+      setShouldPoll(true);
+
+      // Refresh data
+      await Promise.all([mutateEpisode(), mutatePipeline(), mutateAssets()]);
+    } catch (err) {
+      if (isApiError(err)) {
+        setTriggerError(err.message);
+      } else {
+        setTriggerError("Failed to trigger full pipeline. Please try again.");
+      }
+    } finally {
+      setIsTriggering(false);
+    }
+  };
+
   // Loading state
   if (isLoadingEpisode) {
     return <LoadingScreen />;
@@ -184,13 +207,28 @@ export default function EpisodeDetailPage() {
             <StatusBadge variant={getStatusVariant(episode.status)}>
               {statusConfig.label}
             </StatusBadge>
-            {canRunStage1 && (
-              <Button
-                onClick={handleRunStage1}
-                loading={isTriggering}
-                disabled={isRunning}
-              >
-                {isRunning ? "Pipeline Running..." : "Run Stage 1"}
+            {canRunStage1 && !isRunning && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={handleRunStage1}
+                  loading={isTriggering}
+                  disabled={isRunning}
+                >
+                  Run Stage 1
+                </Button>
+                <Button
+                  onClick={handleRunFullPipeline}
+                  loading={isTriggering}
+                  disabled={isRunning}
+                >
+                  Run Full Pipeline
+                </Button>
+              </>
+            )}
+            {isRunning && (
+              <Button disabled loading>
+                Pipeline Running...
               </Button>
             )}
           </div>

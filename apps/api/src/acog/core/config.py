@@ -89,6 +89,10 @@ class Settings(BaseSettings):
     heygen_api_key: str | None = None
     runway_api_key: str | None = None
 
+    # Media mode: "fake" generates placeholder assets, "real" calls actual providers
+    # Use "fake" for development/testing to avoid API costs
+    media_mode: Literal["fake", "real"] = "fake"
+
     # YouTube (optional for MVP)
     youtube_client_id: str | None = None
     youtube_client_secret: str | None = None
